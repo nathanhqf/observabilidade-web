@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\natferreir\\\\OneDrive - Brasilseg Companhia de Seguros\\\\Documentos\\\\Projetos\\\\observabilidade_web\\\\static\\\\index.html'\\).Count\")"
+    ]
+  }
+}
