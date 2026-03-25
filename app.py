@@ -12,6 +12,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from urllib.request import urlopen, Request as UrlRequest
 from urllib.error import URLError
+from collections import defaultdict
+from statistics import median
 from dotenv import load_dotenv
 from auth import hash_password, verify_password, create_session_token, SESSION_TTL_HOURS
 
@@ -347,8 +349,8 @@ def api_volume(user: dict = Depends(require_login)):
     conn = get_conn()
     cursor = conn.cursor(as_dict=True)
     try:
+        # Query principal: dados de hoje + var7d + janelas de hoje (sem medianas)
         cursor.execute("""
-            -- Calcular datas uma vez (sargable: sem CAST na coluna)
             DECLARE @MaxDate DATE = (
                 SELECT MAX(CAST(conversationStart AS DATE))
                 FROM genesys.ConversationDetails
@@ -356,7 +358,6 @@ def api_volume(user: dict = Depends(require_login)):
             );
             DECLARE @MaxDateNext DATE = DATEADD(DAY, 1, @MaxDate);
             DECLARE @PrevDate DATE = DATEADD(DAY, -1, @MaxDate);
-            DECLARE @PrevDateNext DATE = @MaxDate;
             DECLARE @Prev7d DATE = DATEADD(DAY, -7, @MaxDate);
             DECLARE @Prev7dNext DATE = DATEADD(DAY, -6, @MaxDate);
             DECLARE @Now DATETIME = (
@@ -375,7 +376,6 @@ def api_volume(user: dict = Depends(require_login)):
                 WHERE CN IS NOT NULL
                 GROUP BY CAST(CN AS INT)
             ),
-            -- Volume hoje por DDD (TMA só de chamadas finalizadas)
             today_vol AS (
                 SELECT
                     CAST(g.ddd AS INT) AS ddd,
@@ -390,221 +390,175 @@ def api_volume(user: dict = Depends(require_login)):
                   AND g.ddd IS NOT NULL AND g.ddd != ''
                 GROUP BY CAST(g.ddd AS INT)
             ),
-            -- Volume ontem por DDD
-            prev_vol AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS prevTotal
-                FROM genesys.ConversationDetails
-                WHERE conversationStart >= @PrevDate AND conversationStart < @PrevDateNext
-                  AND ddd IS NOT NULL AND ddd != ''
-                GROUP BY CAST(ddd AS INT)
-            ),
-            -- Volume 7 dias atrás por DDD
             prev7d_vol AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS prev7dTotal
+                SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS prev7dTotal
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= @Prev7d AND conversationStart < @Prev7dNext
                   AND ddd IS NOT NULL AND ddd != ''
                 GROUP BY CAST(ddd AS INT)
             ),
-            -- Volume últimas 12h por DDD (hoje)
-            vol_12h AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol12h
-                FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(HOUR, -12, @Now)
-                  AND conversationStart < @MaxDateNext
-                  AND ddd IS NOT NULL AND ddd != ''
-                GROUP BY CAST(ddd AS INT)
-            ),
-            -- Volume 12h equivalente ontem
-            vol_12h_prev AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol12hPrev
-                FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(HOUR, -12, DATEADD(DAY, -1, @Now))
-                  AND conversationStart < DATEADD(DAY, -1, @Now)
-                  AND ddd IS NOT NULL AND ddd != ''
-                GROUP BY CAST(ddd AS INT)
-            ),
-            -- Volume última 1h por DDD
-            vol_1h AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol1h
-                FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(HOUR, -1, @Now)
-                  AND conversationStart < @MaxDateNext
-                  AND ddd IS NOT NULL AND ddd != ''
-                GROUP BY CAST(ddd AS INT)
-            ),
-            -- Volume 1h equivalente ontem
-            vol_1h_prev AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol1hPrev
-                FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(HOUR, -1, DATEADD(DAY, -1, @Now))
-                  AND conversationStart < DATEADD(DAY, -1, @Now)
-                  AND ddd IS NOT NULL AND ddd != ''
-                GROUP BY CAST(ddd AS INT)
-            ),
-            -- Volume últimos 30min por DDD
-            vol_30m AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol30m
-                FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(MINUTE, -30, @Now)
-                  AND conversationStart < @MaxDateNext
-                  AND ddd IS NOT NULL AND ddd != ''
-                GROUP BY CAST(ddd AS INT)
-            ),
-            -- Volume 30min equivalente ontem
-            vol_30m_prev AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol30mPrev
-                FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(MINUTE, -30, DATEADD(DAY, -1, @Now))
-                  AND conversationStart < DATEADD(DAY, -1, @Now)
-                  AND ddd IS NOT NULL AND ddd != ''
-                GROUP BY CAST(ddd AS INT)
-            ),
-            -- Volume últimos 15min por DDD
             vol_15m AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol15m
+                SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(MINUTE, -15, @Now)
-                  AND conversationStart < @MaxDateNext
+                WHERE conversationStart >= DATEADD(MINUTE, -15, @Now) AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
                 GROUP BY CAST(ddd AS INT)
             ),
-            -- Volume 15min equivalente ontem
-            vol_15m_prev AS (
-                SELECT
-                    CAST(ddd AS INT) AS ddd,
-                    COUNT(*) AS vol15mPrev
+            vol_30m AS (
+                SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(MINUTE, -15, DATEADD(DAY, -1, @Now))
-                  AND conversationStart < DATEADD(DAY, -1, @Now)
+                WHERE conversationStart >= DATEADD(MINUTE, -30, @Now) AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
                 GROUP BY CAST(ddd AS INT)
             ),
-            -- Data mais recente da TLV (pode estar defasada)
+            vol_1h AS (
+                SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
+                FROM genesys.ConversationDetails
+                WHERE conversationStart >= DATEADD(HOUR, -1, @Now) AND conversationStart < @MaxDateNext
+                  AND ddd IS NOT NULL AND ddd != ''
+                GROUP BY CAST(ddd AS INT)
+            ),
+            vol_6h AS (
+                SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
+                FROM genesys.ConversationDetails
+                WHERE conversationStart >= DATEADD(HOUR, -6, @Now) AND conversationStart < @MaxDateNext
+                  AND ddd IS NOT NULL AND ddd != ''
+                GROUP BY CAST(ddd AS INT)
+            ),
+            vol_12h AS (
+                SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
+                FROM genesys.ConversationDetails
+                WHERE conversationStart >= DATEADD(HOUR, -12, @Now) AND conversationStart < @MaxDateNext
+                  AND ddd IS NOT NULL AND ddd != ''
+                GROUP BY CAST(ddd AS INT)
+            ),
             tlv_max AS (
                 SELECT MAX(CAST(Dt_Atendimento AS DATE)) AS tlvDate
                 FROM tlv.Atendimentos_Genesys
                 WHERE Dt_Atendimento IS NOT NULL
             ),
-            -- Top motivo por DDD (usa data da TLV, não do Genesys)
             top_motivo AS (
                 SELECT ddd, Grupo_Processo AS topMotivo, Tipo_Processo AS topTipo
                 FROM (
                     SELECT
                         CAST(g.ddd AS INT) AS ddd,
-                        a.Grupo_Processo,
-                        a.Tipo_Processo,
+                        a.Grupo_Processo, a.Tipo_Processo,
                         ROW_NUMBER() OVER (PARTITION BY CAST(g.ddd AS INT) ORDER BY COUNT(*) DESC) AS rn
                     FROM genesys.ConversationDetails g
                     JOIN tlv.Atendimentos_Genesys a ON g.conversationId = a.Conversation_ID
                     CROSS JOIN tlv_max tm
                     WHERE a.Dt_Atendimento >= tm.tlvDate AND a.Dt_Atendimento < DATEADD(DAY, 1, tm.tlvDate)
-                      AND a.Rank_Motivo_Principal = 1
-                      AND g.ddd IS NOT NULL AND g.ddd != ''
+                      AND a.Rank_Motivo_Principal = 1 AND g.ddd IS NOT NULL AND g.ddd != ''
                     GROUP BY CAST(g.ddd AS INT), a.Grupo_Processo, a.Tipo_Processo
                 ) x WHERE rn = 1
             ),
-            -- ACW por DDD (via TLV)
             acw_by_ddd AS (
-                SELECT
-                    CAST(g.ddd AS INT) AS ddd,
-                    AVG(a.Duracao_Tabulacao) AS acw
+                SELECT CAST(g.ddd AS INT) AS ddd, AVG(a.Duracao_Tabulacao) AS acw
                 FROM tlv.Atendimentos_Genesys a
                 JOIN genesys.ConversationDetails g ON g.conversationId = a.Conversation_ID
                 WHERE g.conversationStart >= @PrevDate
-                  AND a.Duracao_Tabulacao IS NOT NULL
-                  AND g.ddd IS NOT NULL AND g.ddd != ''
+                  AND a.Duracao_Tabulacao IS NOT NULL AND g.ddd IS NOT NULL AND g.ddd != ''
                 GROUP BY CAST(g.ddd AS INT)
             ),
-            -- ACW global fallback
             acw_global AS (
                 SELECT AVG(Duracao_Tabulacao) AS acw
                 FROM tlv.Atendimentos_Genesys
-                WHERE Dt_Atendimento >= @PrevDate
-                  AND Duracao_Tabulacao IS NOT NULL
+                WHERE Dt_Atendimento >= @PrevDate AND Duracao_Tabulacao IS NOT NULL
             )
             SELECT
                 t.ddd,
-                ISNULL(d.micro, '') AS micro,
-                ISNULL(d.uf, '') AS uf,
+                ISNULL(d.micro, '') AS micro, ISNULL(d.uf, '') AS uf,
                 ISNULL(d.regiao, '') AS regiao,
-                t.totalToday,
-                t.ongoing,
-                ISNULL(t.tma, 0) AS tma,
-                ISNULL(t.avgIvr, 0) AS avgIvr,
+                t.totalToday, t.ongoing,
+                ISNULL(t.tma, 0) AS tma, ISNULL(t.avgIvr, 0) AS avgIvr,
                 ISNULL(ad.acw, ISNULL(ag.acw, 0)) AS acw,
-                -- var24h
-                CASE
-                    WHEN p.prevTotal IS NULL OR p.prevTotal = 0 THEN 0
-                    ELSE ROUND(((CAST(t.totalToday AS FLOAT) / p.prevTotal) - 1) * 100, 0)
-                END AS var24h,
-                -- var7d
-                CASE
-                    WHEN p7.prev7dTotal IS NULL OR p7.prev7dTotal = 0 THEN 0
-                    ELSE ROUND(((CAST(t.totalToday AS FLOAT) / p7.prev7dTotal) - 1) * 100, 0)
+                ISNULL(v15.vol, 0) AS vol15m,
+                ISNULL(v30.vol, 0) AS vol30m,
+                ISNULL(v1.vol, 0) AS vol1h,
+                ISNULL(v6.vol, 0) AS vol6h,
+                ISNULL(v12.vol, 0) AS vol12h,
+                ISNULL(p7.prev7dTotal, 0) AS prev7dTotal,
+                CASE WHEN p7.prev7dTotal IS NULL OR p7.prev7dTotal = 0 THEN 0
+                     ELSE ROUND(((CAST(t.totalToday AS FLOAT) / p7.prev7dTotal) - 1) * 100, 0)
                 END AS var7d,
-                -- var12h
-                CASE
-                    WHEN v12p.vol12hPrev IS NULL OR v12p.vol12hPrev = 0 THEN 0
-                    ELSE ROUND(((CAST(ISNULL(v12.vol12h, 0) AS FLOAT) / v12p.vol12hPrev) - 1) * 100, 0)
-                END AS var12h,
-                -- var1h
-                CASE
-                    WHEN v1p.vol1hPrev IS NULL OR v1p.vol1hPrev = 0 THEN 0
-                    ELSE ROUND(((CAST(ISNULL(v1.vol1h, 0) AS FLOAT) / v1p.vol1hPrev) - 1) * 100, 0)
-                END AS var1h,
-                -- var30m
-                CASE
-                    WHEN v30p.vol30mPrev IS NULL OR v30p.vol30mPrev = 0 THEN 0
-                    ELSE ROUND(((CAST(ISNULL(v30.vol30m, 0) AS FLOAT) / v30p.vol30mPrev) - 1) * 100, 0)
-                END AS var30m,
-                -- var15m
-                CASE
-                    WHEN v15p.vol15mPrev IS NULL OR v15p.vol15mPrev = 0 THEN 0
-                    ELSE ROUND(((CAST(ISNULL(v15.vol15m, 0) AS FLOAT) / v15p.vol15mPrev) - 1) * 100, 0)
-                END AS var15m,
-                -- volumes absolutos das janelas curtas (prev) para filtro de falso positivo
-                ISNULL(v15p.vol15mPrev, 0) AS vol15mPrev,
-                ISNULL(v30p.vol30mPrev, 0) AS vol30mPrev,
-                ISNULL(v1p.vol1hPrev, 0) AS vol1hPrev,
                 ISNULL(tm.topMotivo, '') AS topMotivo,
-                ISNULL(tm.topTipo, '') AS topTipo
+                ISNULL(tm.topTipo, '') AS topTipo,
+                DATEDIFF(SECOND, CAST(@MaxDate AS DATETIME), @Now) AS time_offset
             FROM today_vol t
             LEFT JOIN ddd_info d ON d.ddd = t.ddd
-            LEFT JOIN prev_vol p ON p.ddd = t.ddd
             LEFT JOIN prev7d_vol p7 ON p7.ddd = t.ddd
-            LEFT JOIN vol_12h v12 ON v12.ddd = t.ddd
-            LEFT JOIN vol_12h_prev v12p ON v12p.ddd = t.ddd
-            LEFT JOIN vol_1h v1 ON v1.ddd = t.ddd
-            LEFT JOIN vol_1h_prev v1p ON v1p.ddd = t.ddd
-            LEFT JOIN vol_30m v30 ON v30.ddd = t.ddd
-            LEFT JOIN vol_30m_prev v30p ON v30p.ddd = t.ddd
             LEFT JOIN vol_15m v15 ON v15.ddd = t.ddd
-            LEFT JOIN vol_15m_prev v15p ON v15p.ddd = t.ddd
+            LEFT JOIN vol_30m v30 ON v30.ddd = t.ddd
+            LEFT JOIN vol_1h v1 ON v1.ddd = t.ddd
+            LEFT JOIN vol_6h v6 ON v6.ddd = t.ddd
+            LEFT JOIN vol_12h v12 ON v12.ddd = t.ddd
             LEFT JOIN top_motivo tm ON tm.ddd = t.ddd
             LEFT JOIN acw_by_ddd ad ON ad.ddd = t.ddd
             CROSS JOIN acw_global ag
             ORDER BY t.totalToday DESC
         """)
         rows = cursor.fetchall()
+
+        # Extrair time_offset do primeiro row da query principal
+        time_offset = rows[0]["time_offset"] if rows else 0
+
+        # 4 queries de referência simples (1 por semana, cada uma é um index seek rápido)
+        # Retorna totais por (ddd, janela) já agregados no SQL
+        windows_def = [
+            ("15m", 900), ("30m", 1800), ("1h", 3600),
+            ("6h", 21600), ("12h", 43200),
+        ]
+        ref_vols = defaultdict(list)
+        for week_offset in [7, 14, 21, 28]:
+            cursor.execute("""
+                DECLARE @MaxDate DATE = (
+                    SELECT MAX(CAST(conversationStart AS DATE))
+                    FROM genesys.ConversationDetails WHERE conversationStart IS NOT NULL
+                );
+                DECLARE @RefDate DATE = DATEADD(DAY, -%s, @MaxDate);
+                DECLARE @RefDateNext DATE = DATEADD(DAY, 1, @RefDate);
+                SELECT
+                    CAST(ddd AS INT) AS ddd,
+                    SUM(CASE WHEN DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             <= %s THEN 1 ELSE 0 END) AS vol24h,
+                    SUM(CASE WHEN DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             > (%s - 900) AND DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             <= %s THEN 1 ELSE 0 END) AS vol15m,
+                    SUM(CASE WHEN DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             > (%s - 1800) AND DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             <= %s THEN 1 ELSE 0 END) AS vol30m,
+                    SUM(CASE WHEN DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             > (%s - 3600) AND DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             <= %s THEN 1 ELSE 0 END) AS vol1h,
+                    SUM(CASE WHEN DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             > (%s - 21600) AND DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             <= %s THEN 1 ELSE 0 END) AS vol6h,
+                    SUM(CASE WHEN DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             > (%s - 43200) AND DATEDIFF(SECOND, CAST(conversationStart AS DATE), conversationStart)
+                             <= %s THEN 1 ELSE 0 END) AS vol12h
+                FROM genesys.ConversationDetails
+                WHERE conversationStart >= @RefDate AND conversationStart < @RefDateNext
+                  AND ddd IS NOT NULL AND ddd != ''
+                GROUP BY CAST(ddd AS INT)
+            """, (week_offset,
+                  time_offset,
+                  time_offset, time_offset,
+                  time_offset, time_offset,
+                  time_offset, time_offset,
+                  time_offset, time_offset,
+                  time_offset, time_offset))
+            for rr in cursor.fetchall():
+                ddd = rr["ddd"]
+                ref_vols[("24h", ddd)].append(rr["vol24h"])
+                if rr["vol15m"]: ref_vols[("15m", ddd)].append(rr["vol15m"])
+                if rr["vol30m"]: ref_vols[("30m", ddd)].append(rr["vol30m"])
+                if rr["vol1h"]:  ref_vols[("1h", ddd)].append(rr["vol1h"])
+                if rr["vol6h"]:  ref_vols[("6h", ddd)].append(rr["vol6h"])
+                if rr["vol12h"]: ref_vols[("12h", ddd)].append(rr["vol12h"])
+
+        medians = {"15m": {}, "30m": {}, "1h": {}, "6h": {}, "12h": {}, "24h": {}}
+        for (win, ddd), vals in ref_vols.items():
+            medians[win][ddd] = median(vals)
 
         # Buscar hourly separadamente e montar array
         cursor.execute("""
@@ -648,40 +602,68 @@ def api_volume(user: dict = Depends(require_login)):
         tlv_row = cursor.fetchone()
         tlv_date = str(tlv_row["max_tlv"]) if tlv_row and tlv_row["max_tlv"] else None
 
+        def _var(vol_today, med_val):
+            if not med_val or med_val == 0:
+                return 0
+            return round(((vol_today / med_val) - 1) * 100)
+
         result = []
         for r in rows:
             ddd = r["ddd"]
-            v15 = int(r["var15m"] or 0)
-            v30 = int(r["var30m"] or 0)
-            v1h = int(r["var1h"] or 0)
-            v12h = int(r["var12h"] or 0)
-            v24h = int(r["var24h"] or 0)
+            vol15 = int(r["vol15m"] or 0)
+            vol30 = int(r["vol30m"] or 0)
+            vol1h = int(r["vol1h"] or 0)
+            vol6h = int(r["vol6h"] or 0)
+            vol12h = int(r["vol12h"] or 0)
+            total = r["totalToday"]
+            # Medianas por janela
+            med15 = medians["15m"].get(ddd, 0)
+            med30 = medians["30m"].get(ddd, 0)
+            med1h = medians["1h"].get(ddd, 0)
+            med6h = medians["6h"].get(ddd, 0)
+            med12h = medians["12h"].get(ddd, 0)
+            med24h = medians["24h"].get(ddd, 0)
+            # Variações
+            v15 = _var(vol15, med15)
+            v30 = _var(vol30, med30)
+            v1h = _var(vol1h, med1h)
+            v6h = _var(vol6h, med6h)
+            v12h = _var(vol12h, med12h)
+            v24h = _var(total, med24h)
             v7d = int(r["var7d"] or 0)
-            # Volumes base das janelas curtas (ontem na mesma janela)
-            bp15 = int(r["vol15mPrev"] or 0)
-            bp30 = int(r["vol30mPrev"] or 0)
-            bp1h = int(r["vol1hPrev"] or 0)
+            # Medianas base para filtro de falso positivo
+            bp15 = int(med15)
+            bp30 = int(med30)
+            bp1h = int(med1h)
+            bp6h = int(med6h)
             result.append({
                 "ddd": ddd,
                 "micro": r["micro"],
                 "uf": r["uf"],
                 "regiao": r["regiao"],
-                "totalToday": r["totalToday"],
+                "totalToday": total,
                 "hourly": hourly_map.get(ddd, [0] * 24),
                 "ongoing": r["ongoing"] or 0,
                 "var15": v15,
                 "var30": v30,
                 "var1h": v1h,
+                "var6h": v6h,
                 "var12h": v12h,
                 "var24h": v24h,
                 "var7d": v7d,
-                "severity": _severity(v15, v30, v1h, v12h, v24h, v7d,
-                                      r["totalToday"], bp15, bp30, bp1h),
+                "severity": _severity(v15, v30, v1h, v6h, v12h, v24h, v7d,
+                                      total, bp15, bp30, bp1h, bp6h),
                 "tma": int(r["tma"] or 0),
                 "avgIvr": int(r["avgIvr"] or 0),
                 "acw": int(r["acw"] or 0),
                 "topMotivo": r["topMotivo"],
                 "topTipo": r["topTipo"],
+                "vol15": vol15, "vol30": vol30, "vol1h": vol1h,
+                "vol6h": vol6h, "vol12h": vol12h,
+                "med15": round(med15, 1), "med30": round(med30, 1),
+                "med1h": round(med1h, 1), "med6h": round(med6h, 1),
+                "med12h": round(med12h, 1), "med24h": round(med24h, 1),
+                "prev7d": int(r["prev7dTotal"] or 0),
             })
 
         return {
@@ -903,6 +885,34 @@ def _fetch_url(url: str, timeout: int = 8) -> bytes:
         return resp.read()
 
 
+@app.get("/api/heatmap-sinistro")
+def api_heatmap_sinistro(user: dict = Depends(require_login)):
+    """Heatmap hora x data dos últimos 7 dias para Comunicação de Sinistro, agrupado por DDD."""
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            SELECT
+                CAST(a.Dt_Atendimento AS DATE) AS dt,
+                DATEPART(HOUR, g.conversationStart) AS hr,
+                CAST(g.ddd AS INT) AS ddd,
+                COUNT(*) AS cnt
+            FROM tlv.Atendimentos_Genesys a
+            JOIN genesys.ConversationDetails g ON g.conversationId = a.Conversation_ID
+            WHERE a.Tipo_Processo LIKE %s
+              AND a.Rank_Motivo_Principal = 1
+              AND a.Dt_Atendimento >= DATEADD(DAY, -7, CAST(GETDATE() AS DATE))
+              AND g.ddd IS NOT NULL AND g.ddd != ''
+            GROUP BY CAST(a.Dt_Atendimento AS DATE), DATEPART(HOUR, g.conversationStart), CAST(g.ddd AS INT)
+            ORDER BY dt, hr
+        """, ('%Comunica%Sinistro%',))
+        rows = cursor.fetchall()
+        # Retorna array granular; frontend agrega conforme filtros
+        return {"rows": [{"dt": str(r["dt"]), "hr": r["hr"], "ddd": r["ddd"], "cnt": r["cnt"]} for r in rows]}
+    finally:
+        conn.close()
+
+
 _NEWS_URL = (
     "http://news.google.com/rss/search"
     "?q=chuva+OR+enchente+OR+tempestade+OR+alagamento+OR+vendaval"
@@ -960,23 +970,24 @@ def api_headlines(user: dict = Depends(require_login)):
     return {"news": headlines, "weather": weather}
 
 
-def _severity(v15: int, v30: int, v1h: int, v12h: int, v24h: int, v7d: int,
-              total: int, bp15: int = 0, bp30: int = 0, bp1h: int = 0) -> str:
+def _severity(v15: int, v30: int, v1h: int, v6h: int, v12h: int, v24h: int, v7d: int,
+              total: int, bp15: int = 0, bp30: int = 0, bp1h: int = 0, bp6h: int = 0) -> str:
     """Calcula severidade considerando todas as janelas temporais e volume mínimo.
 
-    Janelas curtas com volume base (ontem) menor que 5 chamadas são ignoradas
+    Janelas curtas com mediana base menor que 5 chamadas são ignoradas
     para evitar falsos positivos por volatilidade estatística (ex: 1→7 = +600%).
     """
     # DDDs com volume diário muito baixo não devem ser críticos
     if total < 10:
         return "normal"
-    # Ignorar variações de janelas curtas com base < 5 chamadas ontem
+    # Ignorar variações de janelas curtas com mediana base < 5
     MIN_BASE = 5
-    eff_v15 = v15 if bp15 >= MIN_BASE else 0
-    eff_v30 = v30 if bp30 >= MIN_BASE else 0
-    eff_v1h = v1h if bp1h >= MIN_BASE else 0
-    mx_short = max(abs(eff_v15), abs(eff_v30), abs(eff_v1h))
-    mx_long = max(abs(v12h), abs(v24h), abs(v7d))
+    eff_v15 = max(v15, 0) if bp15 >= MIN_BASE else 0
+    eff_v30 = max(v30, 0) if bp30 >= MIN_BASE else 0
+    eff_v1h = max(v1h, 0) if bp1h >= MIN_BASE else 0
+    eff_v6h = max(v6h, 0) if bp6h >= MIN_BASE else 0
+    mx_short = max(eff_v15, eff_v30, eff_v1h, eff_v6h)
+    mx_long = max(max(v12h, 0), max(v24h, 0), max(v7d, 0))
     mx = max(mx_short, mx_long)
     if mx_short > 150 or mx_long > 80:
         return "critical"
