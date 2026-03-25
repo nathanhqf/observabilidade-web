@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\natferreir\\\\OneDrive - Brasilseg Companhia de Seguros\\\\Documentos\\\\Projetos\\\\observabilidade_web\\\\static\\\\index.html'\\).Count\")"
+      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\natferreir\\\\OneDrive - Brasilseg Companhia de Seguros\\\\Documentos\\\\Projetos\\\\observabilidade_web\\\\static\\\\index.html'\\).Count\")",
+      "Bash(powershell -Command \"python -c 'import hashlib; import secrets; import uuid; import hmac; print\\(\\\\\"stdlib OK\\\\\"\\)'\")"
     ]
   }
 }

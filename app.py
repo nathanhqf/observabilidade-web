@@ -1,6 +1,6 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request, Response, Depends, HTTPException, Form, Body
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from contextlib import asynccontextmanager
 from typing import Optional
 import pymssql
@@ -9,10 +9,11 @@ import json
 import logging
 import ssl
 import xml.etree.ElementTree as ET
-from datetime import datetime
-from urllib.request import urlopen, Request
+from datetime import datetime, timedelta
+from urllib.request import urlopen, Request as UrlRequest
 from urllib.error import URLError
 from dotenv import load_dotenv
+from auth import hash_password, verify_password, create_session_token, SESSION_TTL_HOURS
 
 # Contexto SSL permissivo para redes corporativas com proxy SSL
 _ssl_ctx = ssl.create_default_context()
@@ -50,21 +51,290 @@ async def lifespan(app: FastAPI):
         print("Conexão SQL Server OK")
     except Exception as e:
         print(f"AVISO: Falha na conexão SQL Server: {e}")
+    # Limpar sessões expiradas (ignora se tabela não existe ainda)
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM conexreport.sessions WHERE expires_at < GETDATE()")
+        conn.commit()
+        conn.close()
+        print("Sessões expiradas limpas")
+    except Exception:
+        pass
     yield
 
 
-app = FastAPI(title="Observabilidade Call Center", lifespan=lifespan)
+app = FastAPI(title="ConexReport - Observabilidade Call Center", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+# ---------------------------------------------------------------------------
+# Auth helpers (session/user validation)
+# ---------------------------------------------------------------------------
+
+def _get_current_user(request: Request) -> Optional[dict]:
+    """Retorna user dict ou None se não autenticado."""
+    token = request.cookies.get("session_token")
+    if not token:
+        return None
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            SELECT u.id, u.email, u.display_name, u.role, u.is_active
+            FROM conexreport.sessions s
+            JOIN conexreport.users u ON u.id = s.user_id
+            WHERE s.token = %s AND s.expires_at > GETDATE()
+        """, (token,))
+        user = cursor.fetchone()
+        if not user or not user["is_active"] or user["role"] == "pending":
+            return None
+        return user
+    finally:
+        conn.close()
+
+
+def require_login(request: Request) -> dict:
+    """Dependency: requer sessão válida."""
+    user = _get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Não autenticado")
+    return user
+
+
+def require_admin(request: Request) -> dict:
+    """Dependency: requer sessão válida + role admin."""
+    user = require_login(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Páginas públicas
+# ---------------------------------------------------------------------------
+
 @app.get("/")
-async def index():
+async def landing_page():
+    return FileResponse("static/landing.html")
+
+
+@app.get("/login")
+async def login_page():
+    return FileResponse("static/login.html")
+
+
+@app.get("/signup")
+async def signup_page():
+    return FileResponse("static/signup.html")
+
+
+@app.get("/dashboard")
+async def dashboard(request: Request):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?error=expired", status_code=303)
     return FileResponse("static/index.html")
 
 
+@app.get("/admin")
+async def admin_page(request: Request):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?error=expired", status_code=303)
+    if user["role"] != "admin":
+        return RedirectResponse(url="/dashboard", status_code=303)
+    return FileResponse("static/admin.html")
+
+
+# ---------------------------------------------------------------------------
+# Auth endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/auth/login")
+def auth_login(request: Request, email: str = Form(...), password: str = Form(...)):
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        cursor.execute(
+            "SELECT id, password_hash, role, is_active, display_name "
+            "FROM conexreport.users WHERE email = %s",
+            (email.lower().strip(),)
+        )
+        user = cursor.fetchone()
+        if not user or not verify_password(password, user["password_hash"]):
+            return RedirectResponse(url="/login?error=credentials", status_code=303)
+
+        if not user["is_active"]:
+            return RedirectResponse(url="/login?error=inactive", status_code=303)
+
+        if user["role"] == "pending":
+            return RedirectResponse(url="/login?error=pending", status_code=303)
+
+        # Criar sessão
+        token = create_session_token()
+        expires = datetime.now() + timedelta(hours=SESSION_TTL_HOURS)
+        cursor.execute("""
+            INSERT INTO conexreport.sessions (token, user_id, expires_at, ip_address, user_agent)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            token, user["id"], expires,
+            request.client.host if request.client else None,
+            (request.headers.get("user-agent") or "")[:512],
+        ))
+        cursor.execute("UPDATE conexreport.users SET last_login = GETDATE() WHERE id = %s", (user["id"],))
+        conn.commit()
+
+        resp = RedirectResponse(url="/dashboard", status_code=303)
+        resp.set_cookie(
+            key="session_token", value=token,
+            httponly=True, samesite="lax",
+            max_age=SESSION_TTL_HOURS * 3600,
+        )
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/auth/signup")
+def auth_signup(
+    display_name: str = Body(..., embed=True),
+    email: str = Body(..., embed=True),
+    password: str = Body(..., embed=True),
+):
+    """Cria conta com role 'pending'."""
+    display_name = display_name.strip()
+    email = email.strip().lower()
+
+    if not display_name or not email or len(password) < 8:
+        return JSONResponse({"ok": False, "detail": "Preencha todos os campos. Senha mínima: 8 caracteres."})
+
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        # Verificar se email já existe
+        cursor.execute("SELECT id FROM conexreport.users WHERE email = %s", (email,))
+        if cursor.fetchone():
+            return JSONResponse({"ok": False, "detail": "Este email já está cadastrado."})
+
+        pw_hash = hash_password(password)
+        cursor.execute("""
+            INSERT INTO conexreport.users (email, display_name, password_hash, role)
+            VALUES (%s, %s, %s, 'pending')
+        """, (email, display_name, pw_hash))
+        conn.commit()
+        return JSONResponse({"ok": True})
+    finally:
+        conn.close()
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request):
+    token = request.cookies.get("session_token")
+    if token:
+        try:
+            conn = get_conn()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM conexreport.sessions WHERE token = %s", (token,))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+    resp = RedirectResponse(url="/", status_code=303)
+    resp.delete_cookie("session_token")
+    return resp
+
+
+@app.get("/api/me")
+def api_me(user: dict = Depends(require_login)):
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "display_name": user["display_name"],
+        "role": user["role"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin CRUD endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/admin/users")
+def api_admin_users(user: dict = Depends(require_admin)):
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            SELECT id, email, display_name, role, is_active,
+                   created_at, updated_at, last_login, approved_by
+            FROM conexreport.users
+            ORDER BY
+                CASE role WHEN 'pending' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+                created_at DESC
+        """)
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+@app.put("/api/admin/users/{user_id}")
+def api_admin_update_user(user_id: int, body: dict = Body(...), user: dict = Depends(require_admin)):
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        # Verificar se user existe
+        cursor.execute("SELECT id, role FROM conexreport.users WHERE id = %s", (user_id,))
+        target = cursor.fetchone()
+        if not target:
+            return JSONResponse({"ok": False, "detail": "Usuário não encontrado."}, status_code=404)
+
+        sets = []
+        params = []
+
+        if "role" in body and body["role"] in ("pending", "viewer", "admin"):
+            sets.append("role = %s")
+            params.append(body["role"])
+            if body["role"] in ("viewer", "admin") and target["role"] == "pending":
+                sets.append("approved_by = %s")
+                params.append(user["id"])
+
+        if "is_active" in body:
+            sets.append("is_active = %s")
+            params.append(1 if body["is_active"] else 0)
+
+        if not sets:
+            return JSONResponse({"ok": False, "detail": "Nenhum campo para atualizar."})
+
+        sets.append("updated_at = GETDATE()")
+        params.append(user_id)
+
+        cursor.execute(
+            f"UPDATE conexreport.users SET {', '.join(sets)} WHERE id = %s",
+            tuple(params)
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/admin/users/{user_id}")
+def api_admin_delete_user(user_id: int, user: dict = Depends(require_admin)):
+    if user_id == user["id"]:
+        return JSONResponse({"ok": False, "detail": "Você não pode excluir a si mesmo."}, status_code=400)
+    conn = get_conn()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM conexreport.users WHERE id = %s", (user_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @app.get("/api/volume")
-def api_volume():
+def api_volume(user: dict = Depends(require_login)):
     """Volume de chamadas por DDD - dados do dia mais recente."""
     conn = get_conn()
     cursor = conn.cursor(as_dict=True)
@@ -419,7 +689,8 @@ def api_volume():
 
 
 @app.get("/api/motivos")
-def api_motivos(ddds: Optional[str] = Query(None, description="Comma-separated DDD list to filter")):
+def api_motivos(ddds: Optional[str] = Query(None, description="Comma-separated DDD list to filter"),
+                user: dict = Depends(require_login)):
     """Distribuição de motivos de atendimento, opcionalmente filtrada por DDDs."""
     conn = get_conn()
     cursor = conn.cursor(as_dict=True)
@@ -529,7 +800,7 @@ def api_motivos(ddds: Optional[str] = Query(None, description="Comma-separated D
 
 
 @app.get("/api/municipios")
-def api_municipios():
+def api_municipios(user: dict = Depends(require_login)):
     """Municípios agrupados por DDD."""
     conn = get_conn()
     cursor = conn.cursor(as_dict=True)
@@ -557,7 +828,7 @@ def api_municipios():
 
 
 @app.get("/api/agentes")
-def api_agentes():
+def api_agentes(user: dict = Depends(require_login)):
     """Resumo de agentes por grupo de operação."""
     conn = get_conn()
     cursor = conn.cursor(as_dict=True)
@@ -617,7 +888,7 @@ _WEATHER_CITIES = [
 
 def _fetch_url(url: str, timeout: int = 8) -> bytes:
     """Fetch URL usando stdlib (sem dependência de requests)."""
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    req = UrlRequest(url, headers={"User-Agent": "Mozilla/5.0"})
     kwargs = {"timeout": timeout}
     if url.startswith("https"):
         kwargs["context"] = _ssl_ctx
@@ -634,7 +905,7 @@ _NEWS_URL = (
 
 
 @app.get("/api/headlines")
-def api_headlines():
+def api_headlines(user: dict = Depends(require_login)):
     """Headlines de clima/tempo para o ticker."""
     headlines = []
     weather = []
@@ -712,5 +983,27 @@ def _severity(v15: int, v30: int, v1h: int, v12h: int, v24h: int, v7d: int,
 
 
 if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "createsuperuser":
+        # Criar primeiro admin via CLI: python app.py createsuperuser
+        email = input("Email: ").strip().lower()
+        name = input("Nome: ").strip()
+        password = input("Senha: ").strip()
+        if not email or not name or len(password) < 8:
+            print("Erro: email e nome obrigatórios, senha mínima 8 caracteres.")
+            sys.exit(1)
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO conexreport.users (email, display_name, password_hash, role) "
+            "VALUES (%s, %s, %s, 'admin')",
+            (email, name, hash_password(password))
+        )
+        conn.commit()
+        conn.close()
+        print(f"Admin '{name}' ({email}) criado com sucesso!")
+        sys.exit(0)
+
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8050)

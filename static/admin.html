@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConexReport - Administração</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e1a;--bg2:#111827;--card:#1a1f35;--card-border:rgba(6,182,212,0.1);
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --accent:#06b6d4;--accent2:#3b82f6;
+  --red:#ef5350;--green:#66bb6a;--orange:#ff9800;--yellow:#ffd54f;
+  --input-bg:#111827;--input-border:#2d3548;
+  --table-border:#1e293b;--table-hover:rgba(6,182,212,0.05);
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.topbar{background:var(--card);border-bottom:1px solid var(--card-border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-left h1{font-size:18px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.topbar-left span{font-size:12px;color:var(--text2);background:var(--bg2);padding:3px 10px;border-radius:6px;font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.topbar-right a{color:var(--text2);text-decoration:none;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;transition:all 0.2s}
+.topbar-right a:hover{background:var(--bg2);color:var(--text)}
+.container{max-width:1100px;margin:24px auto;padding:0 20px}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:16px 18px;text-align:center}
+.stat-value{font-size:28px;font-weight:800;color:var(--accent)}
+.stat-value.pending{color:var(--orange)}
+.stat-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;font-weight:600}
+.section{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:20px;margin-bottom:20px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.section-title{font-size:14px;font-weight:700;color:var(--text)}
+.search-input{padding:7px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text);font-size:12px;outline:none;width:220px}
+.search-input:focus{border-color:var(--accent)}
+table{width:100%;border-collapse:collapse}
+thead th{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);font-weight:700;padding:8px 10px;text-align:left;border-bottom:2px solid var(--table-border)}
+tbody td{padding:10px;font-size:12px;border-bottom:1px solid var(--table-border);vertical-align:middle}
+tbody tr:hover{background:var(--table-hover)}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
+.badge-pending{background:rgba(255,152,0,0.15);color:var(--orange)}
+.badge-viewer{background:rgba(6,182,212,0.15);color:var(--accent)}
+.badge-admin{background:rgba(139,92,246,0.15);color:#a78bfa}
+.badge-active{background:rgba(102,187,106,0.15);color:var(--green)}
+.badge-inactive{background:rgba(239,83,80,0.15);color:var(--red)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn-sm{padding:4px 10px;border:1px solid var(--input-border);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;background:transparent;color:var(--text2);transition:all 0.2s}
+.btn-sm:hover{background:var(--bg2);color:var(--text)}
+.btn-approve{border-color:rgba(102,187,106,0.4);color:var(--green)}
+.btn-approve:hover{background:rgba(102,187,106,0.1)}
+.btn-promote{border-color:rgba(139,92,246,0.4);color:#a78bfa}
+.btn-promote:hover{background:rgba(139,92,246,0.1)}
+.btn-danger{border-color:rgba(239,83,80,0.4);color:var(--red)}
+.btn-danger:hover{background:rgba(239,83,80,0.1)}
+.empty{text-align:center;padding:40px;color:var(--text3);font-size:13px}
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;z-index:100;transform:translateY(80px);opacity:0;transition:all 0.3s}
+.toast.show{transform:translateY(0);opacity:1}
+.toast-success{background:#2e7d32}
+.toast-error{background:#c62828}
+@media(max-width:768px){.stats-row{grid-template-columns:repeat(2,1fr)}.actions{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>ConexReport</h1>
+    <span>Administração</span>
+  </div>
+  <div class="topbar-right">
+    <a href="/dashboard">Dashboard</a>
+    <a href="#" onclick="logout()">Sair</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-value" id="st-total">-</div><div class="stat-label">Total Usuários</div></div>
+    <div class="stat-card"><div class="stat-value pending" id="st-pending">-</div><div class="stat-label">Aguardando Aprovação</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-active">-</div><div class="stat-label">Ativos</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-admins">-</div><div class="stat-label">Administradores</div></div>
+  </div>
+
+  <div class="section" id="pending-section" style="display:none;">
+    <div class="section-header">
+      <div class="section-title">Solicitações Pendentes</div>
+    </div>
+    <table>
+      <thead><tr><th>Nome</th><th>Email</th><th>Solicitado em</th><th>Ações</th></tr></thead>
+      <tbody id="pending-body"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Todos os Usuários</div>
+      <input type="text" class="search-input" id="search" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
+    </div>
+    <table>
+      <thead><tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Status</th><th>Último Login</th><th>Criado em</th><th>Ações</th></tr></thead>
+      <tbody id="users-body"></tbody>
+    </table>
+    <div class="empty" id="no-users" style="display:none;">Nenhum usuário encontrado.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let USERS = [];
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast toast-' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function fDate(d) {
+  if (!d) return '-';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+}
+
+function loadUsers() {
+  fetch('/api/admin/users').then(r => {
+    if (r.status === 401 || r.status === 403) { window.location.href = '/login?error=expired'; return; }
+    return r.json();
+  }).then(data => {
+    if (!data) return;
+    USERS = data;
+    renderStats();
+    renderPending();
+    renderUsers();
+  }).catch(e => { console.error(e); toast('Erro ao carregar usuários', 'error'); });
+}
+
+function renderStats() {
+  document.getElementById('st-total').textContent = USERS.length;
+  document.getElementById('st-pending').textContent = USERS.filter(u => u.role === 'pending').length;
+  document.getElementById('st-active').textContent = USERS.filter(u => u.is_active && u.role !== 'pending').length;
+  document.getElementById('st-admins').textContent = USERS.filter(u => u.role === 'admin').length;
+}
+
+function renderPending() {
+  const pending = USERS.filter(u => u.role === 'pending');
+  const sec = document.getElementById('pending-section');
+  const body = document.getElementById('pending-body');
+  if (pending.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  body.innerHTML = pending.map(u => `<tr>
+    <td><strong>${esc(u.display_name)}</strong></td>
+    <td>${esc(u.email)}</td>
+    <td>${fDate(u.created_at)}</td>
+    <td class="actions">
+      <button class="btn-sm btn-approve" onclick="approveUser(${u.id})">Aprovar</button>
+      <button class="btn-sm btn-danger" onclick="deleteUser(${u.id},'${esc(u.display_name)}')">Recusar</button>
+    </td>
+  </tr>`).join('');
+}
+
+function renderUsers() {
+  const q = (document.getElementById('search').value || '').toLowerCase();
+  const filtered = USERS.filter(u => u.role !== 'pending' && (u.display_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)));
+  const body = document.getElementById('users-body');
+  const noUsers = document.getElementById('no-users');
+  if (filtered.length === 0) { body.innerHTML = ''; noUsers.style.display = ''; return; }
+  noUsers.style.display = 'none';
+  body.innerHTML = filtered.map(u => {
+    const roleBadge = u.role === 'admin' ? '<span class="badge badge-admin">Admin</span>' : '<span class="badge badge-viewer">Viewer</span>';
+    const statusBadge = u.is_active ? '<span class="badge badge-active">Ativo</span>' : '<span class="badge badge-inactive">Inativo</span>';
+    let actions = '';
+    if (u.role === 'viewer') actions += `<button class="btn-sm btn-promote" onclick="setRole(${u.id},'admin')">Promover Admin</button>`;
+    if (u.role === 'admin') actions += `<button class="btn-sm" onclick="setRole(${u.id},'viewer')">Rebaixar</button>`;
+    if (u.is_active) actions += `<button class="btn-sm btn-danger" onclick="toggleActive(${u.id},false)">Desativar</button>`;
+    else actions += `<button class="btn-sm btn-approve" onclick="toggleActive(${u.id},true)">Ativar</button>`;
+    actions += `<button class="btn-sm btn-danger" onclick="deleteUser(${u.id},'${esc(u.display_name)}')">Excluir</button>`;
+    return `<tr>
+      <td><strong>${esc(u.display_name)}</strong></td>
+      <td>${esc(u.email)}</td>
+      <td>${roleBadge}</td>
+      <td>${statusBadge}</td>
+      <td>${fDate(u.last_login)}</td>
+      <td>${fDate(u.created_at)}</td>
+      <td class="actions">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterUsers() { renderUsers(); }
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function apiCall(method, url, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url, opts).then(r => {
+    if (r.status === 401 || r.status === 403) { window.location.href = '/login?error=expired'; return null; }
+    return r.json();
+  });
+}
+
+function approveUser(id) {
+  apiCall('PUT', '/api/admin/users/' + id, {role: 'viewer'}).then(d => {
+    if (!d) return;
+    if (d.ok) { toast('Usuário aprovado!', 'success'); loadUsers(); }
+    else toast(d.detail || 'Erro', 'error');
+  });
+}
+
+function setRole(id, role) {
+  apiCall('PUT', '/api/admin/users/' + id, {role: role}).then(d => {
+    if (!d) return;
+    if (d.ok) { toast('Perfil atualizado!', 'success'); loadUsers(); }
+    else toast(d.detail || 'Erro', 'error');
+  });
+}
+
+function toggleActive(id, active) {
+  apiCall('PUT', '/api/admin/users/' + id, {is_active: active}).then(d => {
+    if (!d) return;
+    if (d.ok) { toast(active ? 'Usuário ativado!' : 'Usuário desativado!', 'success'); loadUsers(); }
+    else toast(d.detail || 'Erro', 'error');
+  });
+}
+
+function deleteUser(id, name) {
+  if (!confirm('Excluir o usuário "' + name + '"? Esta ação não pode ser desfeita.')) return;
+  apiCall('DELETE', '/api/admin/users/' + id).then(d => {
+    if (!d) return;
+    if (d.ok) { toast('Usuário excluído!', 'success'); loadUsers(); }
+    else toast(d.detail || 'Erro', 'error');
+  });
+}
+
+function logout() {
+  fetch('/auth/logout', {method:'POST'}).then(() => { window.location.href = '/'; });
+}
+
+loadUsers();
+</script>
+</body>
+</html>
