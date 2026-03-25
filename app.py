@@ -117,7 +117,7 @@ def require_admin(request: Request) -> dict:
 
 @app.get("/")
 async def landing_page():
-    return FileResponse("static/landing.html")
+    return RedirectResponse(url="/login", status_code=303)
 
 
 @app.get("/login")
@@ -131,7 +131,15 @@ async def signup_page():
 
 
 @app.get("/dashboard")
-async def dashboard(request: Request):
+async def dashboard_home(request: Request):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?error=expired", status_code=303)
+    return FileResponse("static/home.html")
+
+
+@app.get("/dashboard/observabilidade")
+async def dashboard_observabilidade(request: Request):
     user = _get_current_user(request)
     if not user:
         return RedirectResponse(url="/login?error=expired", status_code=303)
@@ -594,7 +602,6 @@ def api_volume(user: dict = Depends(require_login)):
             LEFT JOIN top_motivo tm ON tm.ddd = t.ddd
             LEFT JOIN acw_by_ddd ad ON ad.ddd = t.ddd
             CROSS JOIN acw_global ag
-            WHERE ISNULL(d.regiao, '') != ''
             ORDER BY t.totalToday DESC
         """)
         rows = cursor.fetchall()
