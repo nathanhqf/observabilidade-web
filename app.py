@@ -388,6 +388,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails g
                 WHERE g.conversationStart >= @MaxDate AND g.conversationStart < @MaxDateNext
                   AND g.ddd IS NOT NULL AND g.ddd != ''
+                  AND g.acd_participantNames IS NOT NULL AND g.acd_participantNames != ''
                 GROUP BY CAST(g.ddd AS INT)
             ),
             prev7d_vol AS (
@@ -395,6 +396,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= @Prev7d AND conversationStart < @Prev7dNext
                   AND ddd IS NOT NULL AND ddd != ''
+                  AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
             ),
             vol_15m AS (
@@ -402,6 +404,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= DATEADD(MINUTE, -15, @Now) AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
+                  AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
             ),
             vol_30m AS (
@@ -409,6 +412,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= DATEADD(MINUTE, -30, @Now) AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
+                  AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
             ),
             vol_1h AS (
@@ -416,6 +420,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= DATEADD(HOUR, -1, @Now) AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
+                  AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
             ),
             vol_6h AS (
@@ -423,6 +428,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= DATEADD(HOUR, -6, @Now) AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
+                  AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
             ),
             vol_12h AS (
@@ -430,6 +436,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= DATEADD(HOUR, -12, @Now) AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
+                  AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
             ),
             tlv_max AS (
@@ -449,6 +456,7 @@ def api_volume(user: dict = Depends(require_login)):
                     CROSS JOIN tlv_max tm
                     WHERE a.Dt_Atendimento >= tm.tlvDate AND a.Dt_Atendimento < DATEADD(DAY, 1, tm.tlvDate)
                       AND a.Rank_Motivo_Principal = 1 AND g.ddd IS NOT NULL AND g.ddd != ''
+                      AND g.acd_participantNames IS NOT NULL AND g.acd_participantNames != ''
                     GROUP BY CAST(g.ddd AS INT), a.Grupo_Processo, a.Tipo_Processo
                 ) x WHERE rn = 1
             ),
@@ -458,6 +466,7 @@ def api_volume(user: dict = Depends(require_login)):
                 JOIN genesys.ConversationDetails g ON g.conversationId = a.Conversation_ID
                 WHERE g.conversationStart >= @PrevDate
                   AND a.Duracao_Tabulacao IS NOT NULL AND g.ddd IS NOT NULL AND g.ddd != ''
+                  AND g.acd_participantNames IS NOT NULL AND g.acd_participantNames != ''
                 GROUP BY CAST(g.ddd AS INT)
             ),
             acw_global AS (
@@ -539,6 +548,7 @@ def api_volume(user: dict = Depends(require_login)):
                 FROM genesys.ConversationDetails
                 WHERE conversationStart >= @RefDate AND conversationStart < @RefDateNext
                   AND ddd IS NOT NULL AND ddd != ''
+                  AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
             """, (week_offset,
                   time_offset,
@@ -569,20 +579,24 @@ def api_volume(user: dict = Depends(require_login)):
             );
             SELECT
                 CAST(ddd AS INT) AS ddd,
-                DATEPART(HOUR, conversationStart) AS hr,
+                DATEPART(HOUR, conversationStart) * 2 +
+                    CASE WHEN DATEPART(MINUTE, conversationStart) >= 30 THEN 1 ELSE 0 END AS slot,
                 COUNT(*) AS cnt
             FROM genesys.ConversationDetails
             WHERE conversationStart >= @MaxDate AND conversationStart < DATEADD(DAY, 1, @MaxDate)
               AND ddd IS NOT NULL AND ddd != ''
-            GROUP BY CAST(ddd AS INT), DATEPART(HOUR, conversationStart)
+              AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
+            GROUP BY CAST(ddd AS INT),
+                DATEPART(HOUR, conversationStart) * 2 +
+                    CASE WHEN DATEPART(MINUTE, conversationStart) >= 30 THEN 1 ELSE 0 END
         """)
         hourly_rows = cursor.fetchall()
         hourly_map = {}
         for h in hourly_rows:
             ddd = h["ddd"]
             if ddd not in hourly_map:
-                hourly_map[ddd] = [0] * 24
-            hourly_map[ddd][h["hr"]] = h["cnt"]
+                hourly_map[ddd] = [0] * 48
+            hourly_map[ddd][h["slot"]] = h["cnt"]
 
         # Buscar data de referência (Genesys) e data da TLV
         cursor.execute("""
@@ -642,7 +656,7 @@ def api_volume(user: dict = Depends(require_login)):
                 "uf": r["uf"],
                 "regiao": r["regiao"],
                 "totalToday": total,
-                "hourly": hourly_map.get(ddd, [0] * 24),
+                "hourly": hourly_map.get(ddd, [0] * 48),
                 "ongoing": r["ongoing"] or 0,
                 "var15": v15,
                 "var30": v30,
@@ -708,13 +722,14 @@ def api_motivos(ddds: Optional[str] = Query(None, description="Comma-separated D
                     ISNULL(a.Grupo_Processo, '') AS grupo,
                     ISNULL(a.Tipo_Processo, '') AS tipo,
                     COUNT(*) AS qtd,
-                    AVG(a.Duracao_Interacao + ISNULL(a.Duracao_Tabulacao, 0)) AS tma
+                    AVG(CASE WHEN g.conversationEnd IS NOT NULL THEN DATEDIFF(SECOND, g.conversationStart, g.conversationEnd) ELSE NULL END) AS tma
                 FROM tlv.Atendimentos_Genesys a
                 JOIN genesys.ConversationDetails g ON g.conversationId = a.Conversation_ID
                 WHERE a.Dt_Atendimento >= @MaxDate AND a.Dt_Atendimento < DATEADD(DAY, 1, @MaxDate)
                   AND a.Rank_Motivo_Principal = 1
                   AND a.Classe_Processo IS NOT NULL
                   AND g.ddd IN ({placeholders})
+                  AND g.acd_participantNames IS NOT NULL AND g.acd_participantNames != ''
                 GROUP BY a.Classe_Processo, a.Grupo_Processo, a.Tipo_Processo
                 ORDER BY a.Classe_Processo, COUNT(*) DESC
             """, tuple(ddd_strs))
@@ -731,11 +746,13 @@ def api_motivos(ddds: Optional[str] = Query(None, description="Comma-separated D
                     ISNULL(a.Grupo_Processo, '') AS grupo,
                     ISNULL(a.Tipo_Processo, '') AS tipo,
                     COUNT(*) AS qtd,
-                    AVG(a.Duracao_Interacao + ISNULL(a.Duracao_Tabulacao, 0)) AS tma
+                    AVG(CASE WHEN g.conversationEnd IS NOT NULL THEN DATEDIFF(SECOND, g.conversationStart, g.conversationEnd) ELSE NULL END) AS tma
                 FROM tlv.Atendimentos_Genesys a
+                JOIN genesys.ConversationDetails g ON g.conversationId = a.Conversation_ID
                 WHERE a.Dt_Atendimento >= @MaxDate AND a.Dt_Atendimento < DATEADD(DAY, 1, @MaxDate)
                   AND a.Rank_Motivo_Principal = 1
                   AND a.Classe_Processo IS NOT NULL
+                  AND g.acd_participantNames IS NOT NULL AND g.acd_participantNames != ''
                 GROUP BY a.Classe_Processo, a.Grupo_Processo, a.Tipo_Processo
                 ORDER BY a.Classe_Processo, COUNT(*) DESC
             """)
@@ -903,12 +920,97 @@ def api_heatmap_sinistro(user: dict = Depends(require_login)):
               AND a.Rank_Motivo_Principal = 1
               AND a.Dt_Atendimento >= DATEADD(DAY, -7, CAST(GETDATE() AS DATE))
               AND g.ddd IS NOT NULL AND g.ddd != ''
+              AND g.acd_participantNames IS NOT NULL AND g.acd_participantNames != ''
             GROUP BY CAST(a.Dt_Atendimento AS DATE), DATEPART(HOUR, g.conversationStart), CAST(g.ddd AS INT)
             ORDER BY dt, hr
         """, ('%Comunica%Sinistro%',))
         rows = cursor.fetchall()
         # Retorna array granular; frontend agrega conforme filtros
         return {"rows": [{"dt": str(r["dt"]), "hr": r["hr"], "ddd": r["ddd"], "cnt": r["cnt"]} for r in rows]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/previsao-horaria")
+def api_previsao_horaria(user: dict = Depends(require_login)):
+    """Mediana de volume por hora dos últimos 4 mesmos dias da semana (previsão)."""
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            DECLARE @MaxDate DATE = (
+                SELECT MAX(CAST(conversationStart AS DATE))
+                FROM genesys.ConversationDetails
+                WHERE conversationStart IS NOT NULL
+            );
+            DECLARE @DW INT = DATEPART(WEEKDAY, @MaxDate);
+            SELECT
+                DATEPART(HOUR, conversationStart) * 2 +
+                    CASE WHEN DATEPART(MINUTE, conversationStart) >= 30 THEN 1 ELSE 0 END AS slot,
+                CAST(conversationStart AS DATE) AS dt,
+                COUNT(*) AS cnt
+            FROM genesys.ConversationDetails
+            WHERE conversationStart >= DATEADD(DAY, -35, @MaxDate)
+              AND conversationStart < @MaxDate
+              AND DATEPART(WEEKDAY, conversationStart) = @DW
+              AND ddd IS NOT NULL AND ddd != ''
+              AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
+            GROUP BY CAST(conversationStart AS DATE),
+                DATEPART(HOUR, conversationStart) * 2 +
+                    CASE WHEN DATEPART(MINUTE, conversationStart) >= 30 THEN 1 ELSE 0 END
+            ORDER BY dt, slot
+        """)
+        rows = cursor.fetchall()
+        # Agrupar por slot de 30min, coletar volumes de cada data
+        slot_vals = defaultdict(list)
+        for r in rows:
+            slot_vals[r["slot"]].append(r["cnt"])
+        # Calcular mediana por slot
+        result = [0] * 48
+        for s in range(48):
+            vals = slot_vals.get(s, [])
+            result[s] = round(median(vals)) if vals else 0
+        return {"forecast": result}
+    finally:
+        conn.close()
+
+
+@app.get("/api/filas")
+def api_filas(user: dict = Depends(require_login)):
+    """Volumetria por fila (última fila no acd_participantNames)."""
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        cursor.execute("""
+            DECLARE @MaxDate DATE = (
+                SELECT MAX(CAST(conversationStart AS DATE))
+                FROM genesys.ConversationDetails
+                WHERE conversationStart IS NOT NULL
+            );
+            DECLARE @MaxDateNext DATE = DATEADD(DAY, 1, @MaxDate);
+            SELECT
+                RTRIM(LTRIM(
+                    REVERSE(LEFT(REVERSE(acd_participantNames),
+                        CHARINDEX(';', REVERSE(acd_participantNames) + ';') - 1))
+                )) AS fila,
+                COUNT(*) AS total,
+                SUM(CASE WHEN conversationEnd IS NULL THEN 1 ELSE 0 END) AS ongoing,
+                AVG(CASE WHEN conversationEnd IS NOT NULL
+                     THEN DATEDIFF(SECOND, conversationStart, conversationEnd)
+                     ELSE NULL END) AS tma
+            FROM genesys.ConversationDetails
+            WHERE conversationStart >= @MaxDate AND conversationStart < @MaxDateNext
+              AND ddd IS NOT NULL AND ddd != ''
+              AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
+            GROUP BY RTRIM(LTRIM(
+                REVERSE(LEFT(REVERSE(acd_participantNames),
+                    CHARINDEX(';', REVERSE(acd_participantNames) + ';') - 1))
+            ))
+            ORDER BY COUNT(*) DESC
+        """)
+        rows = cursor.fetchall()
+        return [{"fila": r["fila"], "total": r["total"], "ongoing": r["ongoing"],
+                 "tma": r["tma"] or 0} for r in rows]
     finally:
         conn.close()
 
