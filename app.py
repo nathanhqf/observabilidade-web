@@ -402,7 +402,8 @@ def api_volume(user: dict = Depends(require_login)):
             vol_15m AS (
                 SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(MINUTE, -15, @Now) AND conversationStart < @MaxDateNext
+                WHERE conversationStart >= CASE WHEN DATEADD(MINUTE, -15, @Now) < @MaxDate THEN @MaxDate ELSE DATEADD(MINUTE, -15, @Now) END
+                  AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
                   AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
@@ -410,7 +411,8 @@ def api_volume(user: dict = Depends(require_login)):
             vol_30m AS (
                 SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(MINUTE, -30, @Now) AND conversationStart < @MaxDateNext
+                WHERE conversationStart >= CASE WHEN DATEADD(MINUTE, -30, @Now) < @MaxDate THEN @MaxDate ELSE DATEADD(MINUTE, -30, @Now) END
+                  AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
                   AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
@@ -418,7 +420,8 @@ def api_volume(user: dict = Depends(require_login)):
             vol_1h AS (
                 SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(HOUR, -1, @Now) AND conversationStart < @MaxDateNext
+                WHERE conversationStart >= CASE WHEN DATEADD(HOUR, -1, @Now) < @MaxDate THEN @MaxDate ELSE DATEADD(HOUR, -1, @Now) END
+                  AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
                   AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
@@ -426,7 +429,8 @@ def api_volume(user: dict = Depends(require_login)):
             vol_6h AS (
                 SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(HOUR, -6, @Now) AND conversationStart < @MaxDateNext
+                WHERE conversationStart >= CASE WHEN DATEADD(HOUR, -6, @Now) < @MaxDate THEN @MaxDate ELSE DATEADD(HOUR, -6, @Now) END
+                  AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
                   AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
@@ -434,7 +438,8 @@ def api_volume(user: dict = Depends(require_login)):
             vol_12h AS (
                 SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS vol
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= DATEADD(HOUR, -12, @Now) AND conversationStart < @MaxDateNext
+                WHERE conversationStart >= CASE WHEN DATEADD(HOUR, -12, @Now) < @MaxDate THEN @MaxDate ELSE DATEADD(HOUR, -12, @Now) END
+                  AND conversationStart < @MaxDateNext
                   AND ddd IS NOT NULL AND ddd != ''
                   AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
@@ -650,6 +655,9 @@ def api_volume(user: dict = Depends(require_login)):
             bp30 = int(med30)
             bp1h = int(med1h)
             bp6h = int(med6h)
+            bp12h = int(med12h)
+            bp24h = int(med24h)
+
             result.append({
                 "ddd": ddd,
                 "micro": r["micro"],
@@ -666,7 +674,8 @@ def api_volume(user: dict = Depends(require_login)):
                 "var24h": v24h,
                 "var7d": v7d,
                 "severity": _severity(v15, v30, v1h, v6h, v12h, v24h, v7d,
-                                      total, bp15, bp30, bp1h, bp6h),
+                                      total, bp15, bp30, bp1h, bp6h,
+                                      bp12h, bp24h),
                 "tma": int(r["tma"] or 0),
                 "avgIvr": int(r["avgIvr"] or 0),
                 "acw": int(r["acw"] or 0),
@@ -1073,23 +1082,26 @@ def api_headlines(user: dict = Depends(require_login)):
 
 
 def _severity(v15: int, v30: int, v1h: int, v6h: int, v12h: int, v24h: int, v7d: int,
-              total: int, bp15: int = 0, bp30: int = 0, bp1h: int = 0, bp6h: int = 0) -> str:
+              total: int, bp15: int = 0, bp30: int = 0, bp1h: int = 0, bp6h: int = 0,
+              bp12h: int = 0, bp24h: int = 0) -> str:
     """Calcula severidade considerando todas as janelas temporais e volume mínimo.
 
-    Janelas curtas com mediana base menor que 5 chamadas são ignoradas
+    Janelas com mediana base menor que MIN_BASE chamadas são ignoradas
     para evitar falsos positivos por volatilidade estatística (ex: 1→7 = +600%).
     """
     # DDDs com volume diário muito baixo não devem ser críticos
     if total < 10:
         return "normal"
-    # Ignorar variações de janelas curtas com mediana base < 5
+    # Ignorar variações de janelas com mediana base muito baixa
     MIN_BASE = 5
     eff_v15 = max(v15, 0) if bp15 >= MIN_BASE else 0
     eff_v30 = max(v30, 0) if bp30 >= MIN_BASE else 0
     eff_v1h = max(v1h, 0) if bp1h >= MIN_BASE else 0
     eff_v6h = max(v6h, 0) if bp6h >= MIN_BASE else 0
+    eff_v12h = max(v12h, 0) if bp12h >= MIN_BASE else 0
+    eff_v24h = max(v24h, 0) if bp24h >= MIN_BASE else 0
     mx_short = max(eff_v15, eff_v30, eff_v1h, eff_v6h)
-    mx_long = max(max(v12h, 0), max(v24h, 0), max(v7d, 0))
+    mx_long = max(eff_v12h, eff_v24h, max(v7d, 0))
     mx = max(mx_short, mx_long)
     if mx_short > 150 or mx_long > 80:
         return "critical"
