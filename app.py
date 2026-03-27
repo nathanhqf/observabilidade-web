@@ -148,6 +148,14 @@ async def dashboard_observabilidade(request: Request):
     return FileResponse("static/index.html")
 
 
+@app.get("/dashboard/resultados")
+async def dashboard_resultados(request: Request):
+    user = _get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?error=expired", status_code=303)
+    return FileResponse("static/resultados.html")
+
+
 @app.get("/admin")
 async def admin_page(request: Request):
     user = _get_current_user(request)
@@ -1079,6 +1087,222 @@ def api_headlines(user: dict = Depends(require_login)):
         print(f"[HEADLINES] Weather fetch error: {type(e).__name__}: {e}")
 
     return {"news": headlines, "weather": weather}
+
+
+# ---------------------------------------------------------------------------
+# Resultados (Painel de Acompanhamento de Negócios Intradia)
+# ---------------------------------------------------------------------------
+
+PRODUCT_LABELS = {
+    "AUTO_VENDA": "Venda",
+    "AUTO_RENOVACAO": "Renovação",
+    "AUTO_VENDA_FROTA": "Venda Frota",
+    "AUTO_RENOVACAO_FROTA": "Renovação Frota",
+    "AUTO_ENDOSSO": "Endosso",
+    "CREDITO_PROTEGIDO": "Crédito Protegido",
+    "PATRIMONIAL_RENOVACAO": "Patrimonial Ren.",
+    "PATRIMONIAL_VENDA": "Patrimonial Ven.",
+    "RESIDENCIAL": "Residencial",
+    "VIDA": "Vida",
+    "EMPRESARIAL": "Empresarial",
+    "ITENS_PESSOAIS": "Itens Pessoais",
+    "OUTROS": "Outros",
+}
+
+
+@app.get("/api/resultados/resumo")
+def api_resultados_resumo(
+    tipo: str = Query("PREMIO", description="PREMIO ou ITENS"),
+    user: dict = Depends(require_login),
+):
+    if tipo not in ("PREMIO", "ITENS"):
+        tipo = "PREMIO"
+
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        # Query A: dados live agrupados por Ident_2, Intervalo 15min, dX
+        # Nota: (X - X/15*15) é equivalente a (X % 15) sem usar % que conflita com pymssql
+        # Produtos principais; tudo fora disso vira OUTROS
+        cursor.execute("""
+            DECLARE @Today DATE = CAST(GETDATE() AS DATE);
+            SELECT
+                CASE
+                    WHEN ident = 'PATRIMONIAL' AND Tipo = N'Renovação' THEN 'PATRIMONIAL_RENOVACAO'
+                    WHEN ident = 'PATRIMONIAL' AND Tipo <> N'Renovação' THEN 'PATRIMONIAL_VENDA'
+                    WHEN ident IN ('AUTO_VENDA','AUTO_RENOVACAO','AUTO_VENDA_FROTA',
+                                   'AUTO_RENOVACAO_FROTA','AUTO_ENDOSSO',
+                                   'CREDITO_PROTEGIDO','RESIDENCIAL','VIDA',
+                                   'EMPRESARIAL','ITENS_PESSOAIS') THEN ident
+                    ELSE 'OUTROS'
+                END AS Ident_2,
+                CASE WHEN ident LIKE %s THEN N'Automóvel' ELSE 'Brasilseg' END AS Segmentacao,
+                CONVERT(VARCHAR(5),
+                    DATEADD(MINUTE,
+                        -(DATEPART(MINUTE, Dt_Status) - (DATEPART(MINUTE, Dt_Status) / 15) * 15),
+                        Dt_Status),
+                    108
+                ) AS Intervalo,
+                SUM(CASE
+                    WHEN ident = 'AUTO_ENDOSSO' THEN ISNULL(Valor_Endosso, 0)
+                    ELSE ISNULL(Premio, 0)
+                END) AS premio_sum,
+                COUNT(*) AS itens_count,
+                DATEDIFF(DAY, @Today, CAST(Dt_Status AS DATE)) AS dX
+            FROM gerencial.DesempenhoLive
+            WHERE CAST(Dt_Status AS DATE) IN (
+                @Today,
+                DATEADD(DAY, -1, @Today),
+                DATEADD(DAY, -7, @Today),
+                DATEADD(DAY, -14, @Today),
+                DATEADD(DAY, -21, @Today),
+                DATEADD(DAY, -28, @Today)
+            )
+            GROUP BY
+                CASE
+                    WHEN ident = 'PATRIMONIAL' AND Tipo = N'Renovação' THEN 'PATRIMONIAL_RENOVACAO'
+                    WHEN ident = 'PATRIMONIAL' AND Tipo <> N'Renovação' THEN 'PATRIMONIAL_VENDA'
+                    WHEN ident IN ('AUTO_VENDA','AUTO_RENOVACAO','AUTO_VENDA_FROTA',
+                                   'AUTO_RENOVACAO_FROTA','AUTO_ENDOSSO',
+                                   'CREDITO_PROTEGIDO','RESIDENCIAL','VIDA',
+                                   'EMPRESARIAL','ITENS_PESSOAIS') THEN ident
+                    ELSE 'OUTROS'
+                END,
+                CASE WHEN ident LIKE %s THEN N'Automóvel' ELSE 'Brasilseg' END,
+                CONVERT(VARCHAR(5),
+                    DATEADD(MINUTE,
+                        -(DATEPART(MINUTE, Dt_Status) - (DATEPART(MINUTE, Dt_Status) / 15) * 15),
+                        Dt_Status),
+                    108
+                ),
+                DATEDIFF(DAY, @Today, CAST(Dt_Status AS DATE))
+            ORDER BY 1, 3, 6
+        """, ('%AUTO%', '%AUTO%'))
+        live_rows = cursor.fetchall()
+
+        # Query B: métricas do dia atual
+        cursor.execute("""
+            SELECT Metrica, Tipo, Valor, Meta_Dia, Nec_Dia,
+                   Realizado, Realizado_hist_mes, GAP_hist_mes,
+                   PesoDiasEmpresa, TTPeso, PesoPercent
+            FROM gerencial.Metricas
+            WHERE Data = CAST(GETDATE() AS DATE)
+              AND Tipo = %s
+              AND Metrica IS NOT NULL
+        """, (tipo,))
+        metricas_rows = cursor.fetchall()
+
+        # Query C: hora do servidor e intervalo atual
+        cursor.execute("""
+            SELECT
+                GETDATE() AS server_time,
+                CONVERT(VARCHAR(5),
+                    DATEADD(MINUTE,
+                        -(DATEPART(MINUTE, GETDATE()) - (DATEPART(MINUTE, GETDATE()) / 15) * 15),
+                        GETDATE()),
+                    108
+                ) AS current_interval
+        """)
+        time_row = cursor.fetchone()
+
+        # Montar lookup de métricas (agrupando produtos secundários em OUTROS)
+        MAIN_PRODUCTS = {
+            'AUTO_VENDA', 'AUTO_RENOVACAO', 'AUTO_VENDA_FROTA',
+            'AUTO_RENOVACAO_FROTA', 'AUTO_ENDOSSO',
+            'CREDITO_PROTEGIDO', 'PATRIMONIAL_RENOVACAO', 'PATRIMONIAL_VENDA',
+            'RESIDENCIAL', 'VIDA', 'EMPRESARIAL', 'ITENS_PESSOAIS',
+        }
+        metricas = {}
+        for m in metricas_rows:
+            key = m["Metrica"]
+            if key not in MAIN_PRODUCTS:
+                key = "OUTROS"
+            vals = {
+                "valor_mensal": float(str(m["Valor"] or 0).replace(",", ".")),
+                "meta_dia": float(str(m["Meta_Dia"] or 0).replace(",", ".")),
+                "nec_dia": float(str(m["Nec_Dia"] or 0).replace(",", ".")),
+                "realizado": float(str(m["Realizado"] or 0).replace(",", ".")),
+                "realizado_hist_mes": float(str(m["Realizado_hist_mes"] or 0).replace(",", ".")),
+                "gap_hist_mes": float(str(m["GAP_hist_mes"] or 0).replace(",", ".")),
+                "peso_percent": float(str(m["PesoPercent"] or 0).replace(",", ".")),
+            }
+            if key in metricas:
+                for k in vals:
+                    metricas[key][k] += vals[k]
+            else:
+                metricas[key] = vals
+
+        # Montar estrutura de produtos
+        products = {}
+        for row in live_rows:
+            ident = row["Ident_2"]
+            if not ident:
+                continue
+            seg = row["Segmentacao"]
+            interval = row["Intervalo"]
+            dx = int(row["dX"])
+            val = float(row["premio_sum"] or 0) if tipo == "PREMIO" else int(row["itens_count"] or 0)
+
+            if ident not in products:
+                products[ident] = {
+                    "segmentacao": seg,
+                    "label": PRODUCT_LABELS.get(ident, ident),
+                    "timeseries": {},
+                }
+            dx_key = str(dx)
+            if dx_key not in products[ident]["timeseries"]:
+                products[ident]["timeseries"][dx_key] = {}
+            products[ident]["timeseries"][dx_key][interval] = val
+
+        # Adicionar métricas e calcular cumulativos
+        for ident, prod in products.items():
+            m = metricas.get(ident, {})
+            prod["meta_dia"] = m.get("meta_dia", 0)
+            prod["nec_dia"] = m.get("nec_dia", 0)
+            prod["valor_mensal"] = m.get("valor_mensal", 0)
+            prod["realizado_hist_mes"] = m.get("realizado_hist_mes", 0)
+            prod["gap_hist_mes"] = m.get("gap_hist_mes", 0)
+            prod["peso_percent"] = m.get("peso_percent", 0)
+
+            # Cumulativos por dX
+            cumulative = {}
+            for dx_key, intervals in prod["timeseries"].items():
+                sorted_intervals = sorted(intervals.items())
+                running = 0
+                cum = {}
+                for intv, v in sorted_intervals:
+                    running += v
+                    cum[intv] = round(running, 2) if tipo == "PREMIO" else running
+                cumulative[dx_key] = cum
+            prod["cumulative"] = cumulative
+
+        # Garantir que produtos com métricas mas sem live data apareçam
+        for met_key, met_data in metricas.items():
+            if met_key not in products:
+                seg = "Automóvel" if "AUTO" in met_key else "Brasilseg"
+                products[met_key] = {
+                    "segmentacao": seg,
+                    "label": PRODUCT_LABELS.get(met_key, met_key),
+                    "timeseries": {},
+                    "cumulative": {},
+                    "meta_dia": met_data.get("meta_dia", 0),
+                    "nec_dia": met_data.get("nec_dia", 0),
+                    "valor_mensal": met_data.get("valor_mensal", 0),
+                    "realizado_hist_mes": met_data.get("realizado_hist_mes", 0),
+                    "gap_hist_mes": met_data.get("gap_hist_mes", 0),
+                    "peso_percent": met_data.get("peso_percent", 0),
+                }
+
+        return {
+            "meta": {
+                "tipo": tipo,
+                "server_time": str(time_row["server_time"]) if time_row else None,
+                "current_interval": time_row["current_interval"] if time_row else None,
+            },
+            "products": products,
+        }
+    finally:
+        conn.close()
 
 
 def _severity(v15: int, v30: int, v1h: int, v6h: int, v12h: int, v24h: int, v7d: int,
