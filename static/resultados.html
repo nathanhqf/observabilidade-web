@@ -119,6 +119,119 @@ td{padding:4px 10px;white-space:nowrap}
 /* No data */
 .no-data{display:flex;align-items:center;justify-content:center;height:100px;color:var(--text-muted);font-size:12px}
 
+/* ── Key Results Section ── */
+.kr-section{display:flex;flex-direction:column;gap:10px;padding:16px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);position:relative}
+.kr-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.kr-section-title{font-size:14px;font-weight:800;letter-spacing:0.3px;text-transform:uppercase;color:var(--text-primary);display:flex;align-items:center;gap:8px}
+.kr-section-title::before{content:'';width:3px;height:18px;background:linear-gradient(180deg,var(--accent-cyan),var(--accent-blue));border-radius:2px}
+.kr-ref-date{font-size:10px;color:var(--text-muted);font-style:italic}
+.kr-ref-date span{color:var(--text-secondary);font-weight:600;font-style:normal}
+
+/* KR Top Gauges */
+.kr-top-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kr-gauge-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;position:relative;overflow:hidden}
+.kr-gauge-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px}
+.kr-gauge-card.kr-parcial::before{background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan))}
+.kr-gauge-card.kr-projetado::before{background:linear-gradient(135deg,var(--accent-green),#81c784)}
+.kr-gauge-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px}
+.kr-gauge-value{font-size:28px;font-weight:900;letter-spacing:-1px;margin-bottom:8px}
+.kr-parcial .kr-gauge-value{color:var(--accent-blue)}
+.kr-projetado .kr-gauge-value{color:var(--accent-green)}
+.kr-bar-track{height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden;position:relative}
+.kr-bar-fill{height:100%;border-radius:4px;transition:width 0.8s ease}
+.kr-parcial .kr-bar-fill{background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan))}
+.kr-projetado .kr-bar-fill{background:linear-gradient(90deg,var(--accent-green),#81c784)}
+.kr-bar-label{display:flex;justify-content:flex-end;margin-top:3px;font-size:9px;color:var(--text-muted)}
+
+/* KR Grid: full-width stacked layout */
+.kr-body{display:flex;flex-direction:column;gap:10px}
+
+/* PEL Section */
+.kr-pel-section{display:flex;flex-direction:column;gap:10px}
+.kr-pel-top{display:flex;flex-direction:column;gap:10px}
+.kr-pel-table-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.kr-pel-table-card .kr-card-title{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;color:var(--accent-yellow);letter-spacing:0.5px}
+.kr-pel-table{width:100%;border-collapse:collapse;font-size:11px}
+.kr-pel-table thead th{padding:6px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap}
+.kr-pel-table tbody td{padding:6px 10px;white-space:nowrap;border-bottom:1px solid rgba(37,43,94,0.4)}
+.kr-pel-table tbody tr:last-child td{border-bottom:none}
+.kr-pel-table .seg-name{font-weight:700;font-size:10px;color:var(--text-secondary)}
+.kr-pel-table .val-money{font-family:var(--font-mono);font-weight:600;font-size:11px}
+.kr-pel-table .val-pct{font-family:var(--font-mono);font-weight:700;font-size:11px}
+.kr-pel-mini-bar{display:inline-block;height:6px;border-radius:3px;background:var(--accent-blue);opacity:0.6;vertical-align:middle;margin-left:4px}
+
+/* PEL Products row */
+.kr-pel-products{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.kr-pel-prod-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;text-align:center}
+.kr-pel-prod-card .prod-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;padding:2px 6px;border-radius:3px;display:inline-block;margin-bottom:4px}
+.kr-pel-prod-card .prod-label.l-residencial{background:rgba(79,195,247,0.15);color:var(--accent-blue)}
+.kr-pel-prod-card .prod-label.l-patrimonial{background:rgba(255,213,79,0.15);color:var(--accent-yellow)}
+.kr-pel-prod-card .prod-label.l-credito{background:rgba(239,83,80,0.15);color:var(--accent-red)}
+.kr-pel-prod-card .prod-label.l-vida{background:rgba(171,71,188,0.15);color:var(--accent-purple)}
+.kr-pel-prod-card .prod-label.l-outros{background:rgba(102,187,106,0.15);color:var(--accent-green)}
+.kr-pel-prod-card .prod-value{font-size:14px;font-weight:800;letter-spacing:-0.3px;margin-bottom:2px}
+.kr-pel-prod-card .prod-meta{font-size:9px;color:var(--text-muted)}
+.kr-pel-prod-card .prod-meta .yoy{font-weight:700}
+.kr-pel-prod-card .prod-proj{font-size:9px;color:var(--text-muted);margin-top:2px}
+.kr-pel-prod-card .prod-proj span{font-weight:600;color:var(--text-secondary)}
+
+/* Bottom row: NPS + indicators side by side, all same height */
+.kr-bottom-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;align-items:stretch}
+
+/* NPS Card */
+.kr-nps-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px}
+.kr-nps-top{display:flex;align-items:center;gap:14px}
+.kr-nps-gauge{position:relative;width:100px;height:100px;flex-shrink:0}
+.kr-nps-gauge svg{width:100%;height:100%}
+.kr-nps-gauge .gauge-value{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.kr-nps-gauge .gauge-value .gv-num{font-size:22px;font-weight:900;letter-spacing:-0.5px;color:var(--accent-yellow)}
+.kr-nps-gauge .gauge-value .gv-label{font-size:8px;color:var(--text-muted);text-transform:uppercase;font-weight:700}
+.kr-nps-info{display:flex;flex-direction:column;gap:6px}
+.kr-nps-info .nps-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)}
+.kr-nps-chart{min-height:60px;margin-top:auto;width:100%}
+.kr-nps-stats{display:flex;gap:12px;flex-wrap:wrap}
+.kr-nps-stat{display:flex;flex-direction:column}
+.kr-nps-stat .stat-label{font-size:8px;font-weight:700;color:var(--text-muted);text-transform:uppercase}
+.kr-nps-stat .stat-val{font-size:12px;font-weight:700}
+
+/* Bottom indicator cards (Retenção, FCR, Eficiência) — each renders as standalone card in kr-bottom-row */
+.kr-indicators-grid{display:contents}
+.kr-ind-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.kr-ind-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px}
+.kr-ind-card.ind-retencao::before{background:linear-gradient(135deg,var(--accent-orange),#ffb74d)}
+.kr-ind-card.ind-fcr::before{background:linear-gradient(135deg,var(--accent-green),#81c784)}
+.kr-ind-card.ind-eficiencia::before{background:linear-gradient(135deg,var(--accent-purple),#ce93d8)}
+.kr-ind-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px}
+.kr-ind-row{display:flex;flex-direction:column;gap:8px;flex:1;justify-content:space-between}
+.kr-ind-metric{display:flex;flex-direction:column}
+.kr-ind-metric .im-label{font-size:8px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:1px}
+.kr-ind-metric .im-val{font-size:16px;font-weight:800;letter-spacing:-0.3px}
+.kr-ind-metric .im-val.big{font-size:20px}
+.kr-ind-pair{display:flex;gap:16px}
+.kr-ind-bar-wrap{width:100%}
+.kr-ind-bar-track{height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden}
+.kr-ind-bar-fill{height:100%;border-radius:3px}
+.ind-retencao .kr-ind-bar-fill{background:var(--accent-orange)}
+.ind-fcr .kr-ind-bar-fill{background:var(--accent-green)}
+.ind-eficiencia .kr-ind-bar-fill{background:var(--accent-purple)}
+
+/* Retenção monthly mini chart */
+.kr-ret-chart{min-height:60px;margin-top:auto}
+
+/* PEL monthly chart */
+.kr-pel-chart{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px}
+.kr-pel-chart-title{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:6px}
+.kr-pel-chart-area{height:120px;width:100%}
+
+/* Divider */
+.kr-divider{height:1px;background:var(--border);margin:4px 0}
+
+/* Section divider for Intradia */
+.section-divider{display:flex;align-items:center;gap:12px;margin:10px 0 2px}
+.section-divider-title{font-size:14px;font-weight:800;letter-spacing:0.3px;text-transform:uppercase;color:var(--text-primary);white-space:nowrap;display:flex;align-items:center;gap:8px}
+.section-divider-title::before{content:'';width:3px;height:18px;background:linear-gradient(180deg,var(--accent-cyan),var(--accent-blue));border-radius:2px}
+.section-divider-line{flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+
 @media(max-width:768px){
   .header{flex-direction:column;gap:10px;text-align:center}
   .header-right{justify-content:center}
@@ -153,8 +266,54 @@ td{padding:4px 10px;white-space:nowrap}
 </div>
 
 <div class="dashboard" id="dashboard">
-  <!-- Tab bar -->
-  <div class="tab-bar">
+  <!-- Key Results (D-1) -->
+  <div class="kr-section" id="kr-section" style="display:none;">
+    <div class="kr-section-header">
+      <div class="kr-section-title">Key Results da Central de Atendimento</div>
+      <div class="kr-ref-date">Atualizado em: <span id="kr-ref-date">--</span></div>
+    </div>
+
+    <!-- KR Gauges -->
+    <div class="kr-top-row" id="kr-gauges"></div>
+
+    <!-- PEL + NPS/Indicators -->
+    <div class="kr-body">
+      <!-- Left: PEL -->
+      <div class="kr-pel-section">
+        <div class="kr-pel-top">
+          <div class="kr-pel-table-card">
+            <div class="kr-card-title">Prêmio Emitido Líquido | PEL</div>
+            <table class="kr-pel-table">
+              <thead><tr>
+                <th>PEL</th><th>Realizado</th><th>Meta Total</th><th>Atg. Meta</th>
+                <th>Projetado</th><th>Valor Projetado</th><th>GAP Meta</th>
+              </tr></thead>
+              <tbody id="kr-pel-tbody"></tbody>
+            </table>
+          </div>
+          <!-- PEL monthly chart -->
+          <div class="kr-pel-chart">
+            <div class="kr-pel-chart-title">PEL Mensal (Brasilseg) — PEL Dia + PEL Acumulado</div>
+            <div class="kr-pel-chart-area" id="kr-pel-chart-area"></div>
+          </div>
+        </div>
+        <!-- PEL Products -->
+        <div class="kr-pel-products" id="kr-pel-products"></div>
+      </div>
+
+    </div>
+
+    <!-- Bottom: NPS + Retenção + FCR + Eficiência (4 cols) -->
+    <div class="kr-bottom-row">
+      <div class="kr-nps-card" id="kr-nps-card"></div>
+      <div class="kr-indicators-grid" id="kr-indicators"></div>
+    </div>
+  </div>
+
+  <!-- Separador Intradia -->
+  <div class="section-divider">
+    <div class="section-divider-title">Acompanhamento de Negócios Intradia</div>
+    <div class="section-divider-line"></div>
     <div class="tabs" id="tipo-tabs">
       <button class="tab active" data-tipo="PREMIO" onclick="switchTipo('PREMIO')">Prêmio</button>
       <button class="tab" data-tipo="ITENS" onclick="switchTipo('ITENS')">Itens</button>
@@ -758,6 +917,331 @@ function startClock(){
   setInterval(tick, 1000);
 }
 
+// ── Key Results ──
+var KR_DATA = null;
+var MONTH_NAMES = ['','janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+var MONTH_SHORT = ['','jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+function fMoney(n){
+  if(n==null||isNaN(n)) return '--';
+  var abs = Math.abs(n);
+  var sign = n<0?'-':'';
+  if(abs>=1e9) return sign+'R$ '+(abs/1e9).toFixed(3).replace('.',',')+' Bi';
+  if(abs>=1e6) return sign+'R$ '+(abs/1e6).toFixed(3).replace('.',',')+' Mi';
+  if(abs>=1e3) return sign+'R$ '+(abs/1e3).toFixed(0)+' Mil';
+  return sign+'R$ '+abs.toFixed(0);
+}
+function fMoneyFull(n){
+  if(n==null||isNaN(n)) return '--';
+  var sign = n<0?'-':'';
+  var abs = Math.abs(n);
+  return sign+'R$ '+Math.round(abs).toLocaleString('pt-BR');
+}
+function fPctKR(v,dec){
+  if(v==null||isNaN(v)) return '--';
+  dec = dec!=null?dec:1;
+  return v.toFixed(dec).replace('.',',')+'%';
+}
+function krArrow(val,meta){
+  if(val==null||meta==null) return '';
+  return val>=meta?'<span style="color:var(--accent-green);font-size:10px;">&#9650;</span>':'<span style="color:var(--accent-red);font-size:10px;">&#9660;</span>';
+}
+
+function renderKRGauges(){
+  var el = document.getElementById('kr-gauges');
+  if(!KR_DATA||!KR_DATA.indicadores) {el.innerHTML='';return;}
+  var ind = KR_DATA.indicadores;
+  var parcial = ind.KR_PARCIAL && ind.KR_PARCIAL.anual.GERAL ? ind.KR_PARCIAL.anual.GERAL.realizado : null;
+  var projetado = ind.KR_PROJETADO && ind.KR_PROJETADO.anual.GERAL ? ind.KR_PROJETADO.anual.GERAL.realizado : null;
+  var html = '';
+  // KR Parcial
+  html += '<div class="kr-gauge-card kr-parcial">';
+  html += '<div class="kr-gauge-label">KR Resultado Parcial</div>';
+  html += '<div class="kr-gauge-value">'+(parcial!=null?fPctKR(parcial,1):'--')+'</div>';
+  html += '<div class="kr-bar-track"><div class="kr-bar-fill" style="width:'+(parcial!=null?Math.min(parcial,100):0)+'%"></div></div>';
+  html += '<div class="kr-bar-label">100%</div>';
+  html += '</div>';
+  // KR Projetado
+  html += '<div class="kr-gauge-card kr-projetado">';
+  html += '<div class="kr-gauge-label">KR Resultado Projetado</div>';
+  html += '<div class="kr-gauge-value">'+(projetado!=null?fPctKR(projetado,1):'--')+'</div>';
+  html += '<div class="kr-bar-track"><div class="kr-bar-fill" style="width:'+(projetado!=null?Math.min(projetado,100):0)+'%"></div></div>';
+  html += '<div class="kr-bar-label">100%</div>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderKRPelTable(){
+  var el = document.getElementById('kr-pel-tbody');
+  if(!KR_DATA||!KR_DATA.indicadores||!KR_DATA.indicadores.PEL){el.innerHTML='';return;}
+  var pel = KR_DATA.indicadores.PEL.anual;
+  var segs = [
+    {key:'BRASILSEG_AUTO', label:'BRASILSEG+AUTO'},
+    {key:'BRASILSEG', label:'BRASILSEG'},
+    {key:'AUTOMOVEL', label:'AUTOMÓVEL'}
+  ];
+  var html = '';
+  segs.forEach(function(s){
+    var d = pel[s.key];
+    if(!d) return;
+    var atgW = d.atingimento_pct!=null ? Math.min(d.atingimento_pct*100/30,100) : 0; // scale bar to ~30% max
+    html += '<tr>';
+    html += '<td class="seg-name">'+s.label+'</td>';
+    html += '<td class="val-money">'+fMoneyFull(d.realizado)+'</td>';
+    html += '<td class="val-money">'+fMoneyFull(d.meta_total_ano)+'</td>';
+    html += '<td class="val-pct">'+krArrow(d.atingimento_pct,25)+' '+fPctKR(d.atingimento_pct,2)+'<span class="kr-pel-mini-bar" style="width:'+atgW+'px;"></span></td>';
+    html += '<td class="val-pct">'+krArrow(d.projetado_pct,100)+' '+fPctKR(d.projetado_pct,2)+'</td>';
+    html += '<td class="val-money">'+krArrow(d.projetado, d.meta_total_ano)+' '+fMoneyFull(d.projetado)+'</td>';
+    html += '<td class="val-money" style="color:'+(d.gap_meta!=null&&d.gap_meta<0?'var(--accent-red)':'var(--accent-green)')+'">'+fMoneyFull(d.gap_meta)+'</td>';
+    html += '</tr>';
+  });
+  el.innerHTML = html;
+}
+
+function renderKRPelChart(){
+  var el = document.getElementById('kr-pel-chart-area');
+  if(!KR_DATA||!KR_DATA.indicadores||!KR_DATA.indicadores.PEL){el.innerHTML='';return;}
+  var mensal = KR_DATA.indicadores.PEL.mensal;
+  var months = Object.keys(mensal).map(Number).sort(function(a,b){return a-b;});
+  if(!months.length){el.innerHTML='<div class="no-data">Sem dados mensais</div>';return;}
+
+  var vals = months.map(function(m){
+    var d = mensal[m].BRASILSEG || mensal[m].GERAL;
+    return d ? d.realizado||0 : 0;
+  });
+  // cumulative
+  var cum = []; var running=0;
+  vals.forEach(function(v){running+=v;cum.push(running);});
+
+  var W=800, H=120, pad=30, padR=50, padB=20, padT=10;
+  var maxBar = Math.max.apply(null,vals)||1;
+  var maxCum = Math.max.apply(null,cum)||1;
+  var barW = Math.min(50, (W-pad-padR)/(months.length*1.8));
+  var svg = '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%">';
+
+  // Bars
+  months.forEach(function(m,i){
+    var x = pad + i*((W-pad-padR)/months.length) + barW*0.4;
+    var bH = (vals[i]/maxBar)*(H-padT-padB);
+    var y = H-padB-bH;
+    svg += '<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+bH+'" rx="2" fill="rgba(102,187,106,0.35)" stroke="none"/>';
+    svg += '<text x="'+(x+barW/2)+'" y="'+(H-4)+'" text-anchor="middle" fill="'+cv('--text-muted')+'" font-size="7" font-family="'+cv('--font')+'">'+MONTH_SHORT[m]+'</text>';
+  });
+
+  // Cumulative line
+  var linePoints = months.map(function(m,i){
+    var x = pad + i*((W-pad-padR)/months.length) + barW*0.9;
+    var y = padT + (H-padT-padB) - (cum[i]/maxCum)*(H-padT-padB);
+    return x.toFixed(1)+','+y.toFixed(1);
+  });
+  if(linePoints.length>1){
+    svg += '<polyline points="'+linePoints.join(' ')+'" fill="none" stroke="'+cv('--accent-cyan')+'" stroke-width="2" stroke-linecap="round"/>';
+  }
+  // Dots + labels for cumulative
+  months.forEach(function(m,i){
+    var x = pad + i*((W-pad-padR)/months.length) + barW*0.9;
+    var y = padT + (H-padT-padB) - (cum[i]/maxCum)*(H-padT-padB);
+    svg += '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3" fill="'+cv('--accent-cyan')+'"/>';
+    svg += '<text x="'+x.toFixed(1)+'" y="'+(y-6)+'" text-anchor="middle" fill="'+cv('--text-secondary')+'" font-size="7" font-weight="700" font-family="'+cv('--font')+'">'+fMoney(cum[i])+'</text>';
+  });
+
+  // Right axis label
+  svg += '<text x="'+(W-4)+'" y="'+padT+'" text-anchor="end" fill="'+cv('--text-muted')+'" font-size="6" font-family="'+cv('--font')+'">'+fMoney(maxCum)+'</text>';
+  svg += '<text x="'+(W-4)+'" y="'+(H-padB)+'" text-anchor="end" fill="'+cv('--text-muted')+'" font-size="6" font-family="'+cv('--font')+'">0</text>';
+
+  svg += '</svg>';
+  el.innerHTML = svg;
+}
+
+function renderKRPelProducts(){
+  var el = document.getElementById('kr-pel-products');
+  if(!KR_DATA||!KR_DATA.indicadores||!KR_DATA.indicadores.PEL){el.innerHTML='';return;}
+  var pel = KR_DATA.indicadores.PEL.anual;
+  var prods = [
+    {key:'RESIDENCIAL',label:'Residencial',cls:'l-residencial'},
+    {key:'PATRIMONIAL',label:'Patrimonial',cls:'l-patrimonial'},
+    {key:'CREDITO_PROTEGIDO',label:'Crédito Protegido',cls:'l-credito'},
+    {key:'VIDA',label:'Vida',cls:'l-vida'},
+    {key:'OUTROS',label:'Outros',cls:'l-outros'}
+  ];
+  var html = '';
+  prods.forEach(function(p){
+    var d = pel[p.key];
+    if(!d) return;
+    var yoyCls = d.yoy_pct!=null&&d.yoy_pct>=0?'var(--accent-green)':'var(--accent-red)';
+    var yoySign = d.yoy_pct!=null&&d.yoy_pct>=0?'+':'';
+    var projPct = d.projetado!=null&&d.meta_total_ano? ((d.projetado/d.meta_total_ano)*100).toFixed(0)+'%' : '--';
+    html += '<div class="kr-pel-prod-card">';
+    html += '<div class="prod-label '+p.cls+'">'+p.label+'</div>';
+    html += '<div class="prod-value" style="color:'+(d.realizado!=null&&d.meta_total_ano!=null&&d.realizado>=d.meta_total_ano?'var(--accent-green)':'var(--text-primary)')+'">'+fMoney(d.realizado)+'</div>';
+    html += '<div class="prod-meta">Meta: '+fMoney(d.meta_total_ano)+' <span class="yoy" style="color:'+yoyCls+'">('+(d.yoy_pct!=null?yoySign+fPctKR(d.yoy_pct,2):'--')+')</span></div>';
+    html += '<div class="prod-proj">Projetado: <span>'+fMoney(d.projetado)+' ('+projPct+')</span></div>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function makeGaugeSvg(value, meta, color, size){
+  size = size||100;
+  var r = size*0.42;
+  var cx = size/2, cy = size/2;
+  var startAngle = -225, endAngle = 45;
+  var totalArc = endAngle - startAngle; // 270 degrees
+  var pct = meta>0 ? Math.min(value/meta,1) : 0;
+  var metaPct = 1; // meta is always 100% of arc
+  function polarToCart(a){
+    var rad = a*Math.PI/180;
+    return {x:cx+r*Math.cos(rad), y:cy+r*Math.sin(rad)};
+  }
+  var s = polarToCart(startAngle);
+  var eMeta = polarToCart(startAngle + totalArc*metaPct);
+  var eVal = polarToCart(startAngle + totalArc*pct);
+  var largeArcMeta = totalArc*metaPct>180?1:0;
+  var largeArcVal = totalArc*pct>180?1:0;
+
+  var svg = '<svg viewBox="0 0 '+size+' '+size+'" style="width:100%;height:100%">';
+  // Track
+  svg += '<path d="M'+s.x+' '+s.y+' A'+r+' '+r+' 0 '+largeArcMeta+' 1 '+eMeta.x+' '+eMeta.y+'" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8" stroke-linecap="round"/>';
+  // Value arc
+  if(pct>0){
+    svg += '<path d="M'+s.x+' '+s.y+' A'+r+' '+r+' 0 '+largeArcVal+' 1 '+eVal.x+' '+eVal.y+'" fill="none" stroke="'+color+'" stroke-width="8" stroke-linecap="round"/>';
+  }
+  // Meta tick mark
+  var tick = polarToCart(startAngle + totalArc * metaPct);
+  svg += '<circle cx="'+tick.x+'" cy="'+tick.y+'" r="3" fill="rgba(255,255,255,0.3)"/>';
+  svg += '</svg>';
+  return svg;
+}
+
+function renderKRNPS(){
+  var el = document.getElementById('kr-nps-card');
+  if(!KR_DATA||!KR_DATA.indicadores||!KR_DATA.indicadores.NPS){el.innerHTML='<div class="no-data">Sem dados NPS</div>';return;}
+  var nps = KR_DATA.indicadores.NPS;
+  var anual = nps.anual.GERAL||{};
+  var mensal = nps.mensal;
+  var months = Object.keys(mensal||{}).map(Number).sort(function(a,b){return a-b;});
+
+  var html = '';
+  // Top row: Gauge + Stats
+  html += '<div class="kr-nps-top">';
+  html += '<div class="kr-nps-gauge">';
+  html += makeGaugeSvg(anual.realizado||0, anual.meta||75, cv('--accent-yellow'), 100);
+  html += '<div class="gauge-value"><div class="gv-num">'+(anual.realizado!=null?anual.realizado.toFixed(1):'--')+'</div><div class="gv-label">NPS</div></div>';
+  html += '</div>';
+  html += '<div class="kr-nps-info">';
+  html += '<div class="nps-title">NPS '+KR_DATA.ano+'</div>';
+  html += '<div class="kr-nps-stats">';
+  html += '<div class="kr-nps-stat"><span class="stat-label">Meta</span><span class="stat-val" style="color:var(--accent-green)">'+(anual.meta!=null?anual.meta.toFixed(1):'--')+'</span></div>';
+  html += '<div class="kr-nps-stat"><span class="stat-label">Avaliações</span><span class="stat-val">'+(anual.avaliacoes!=null?anual.avaliacoes.toLocaleString('pt-BR'):'--')+'</span></div>';
+  html += '<div class="kr-nps-stat"><span class="stat-label">Atg. Meta</span><span class="stat-val" style="color:'+(anual.atingimento_pct!=null&&anual.atingimento_pct>=100?'var(--accent-green)':'var(--accent-yellow)')+'">'+fPctKR(anual.atingimento_pct,1)+'</span></div>';
+  html += '<div class="kr-nps-stat"><span class="stat-label">Últ. 6 meses</span><span class="stat-val">'+(anual.ultimos_6m!=null?anual.ultimos_6m.toFixed(1):'--')+'</span></div>';
+  html += '</div>';
+  html += '</div>';
+  html += '</div>';
+
+  // Bottom: Monthly chart using same generic function as other cards
+  html += indMiniChart(mensal, anual.meta||75, cv('--accent-blue'));
+
+  el.innerHTML = html;
+}
+
+// Generic mini monthly chart SVG for indicator cards
+function indMiniChart(mensal, metaVal, color){
+  var months = Object.keys(mensal||{}).map(Number).sort(function(a,b){return a-b;});
+  if(!months.length) return '';
+  var W3=250,H3=70,p3=6;
+  var vals = months.map(function(m){return (mensal[m].GERAL||{}).realizado||0;});
+  var allV = vals.concat([metaVal||0]);
+  var maxV = Math.max.apply(null,allV)||1;
+  var minV = Math.min.apply(null,allV)*0.95;
+  var range = maxV-minV||1;
+  var svg = '<svg viewBox="0 0 '+W3+' '+H3+'" style="width:100%;height:100%">';
+  // Meta line
+  var my = p3+(H3-p3*2)-(((metaVal-minV)/range)*(H3-p3*2));
+  svg += '<line x1="0" y1="'+my.toFixed(1)+'" x2="'+W3+'" y2="'+my.toFixed(1)+'" stroke="var(--accent-red)" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>';
+  svg += '<text x="'+(W3-2)+'" y="'+(my-3)+'" text-anchor="end" fill="var(--accent-red)" font-size="8" font-family="'+cv('--font')+'" opacity="0.7">Meta '+metaVal+'%</text>';
+  // Points
+  var pts = months.map(function(m,i){
+    var v = vals[i];
+    var x = p3+20 + i*((W3-p3*2-40)/Math.max(months.length-1,1));
+    var y = p3+(H3-p3*2)-(((v-minV)/range)*(H3-p3*2));
+    return {x:x,y:y,v:v,m:m};
+  });
+  // Line
+  if(pts.length>1){
+    svg += '<polyline points="'+pts.map(function(p){return p.x.toFixed(1)+','+p.y.toFixed(1);}).join(' ')+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" opacity="0.5"/>';
+  }
+  // Dots + labels
+  pts.forEach(function(p){
+    svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+color+'" stroke="'+cv('--bg-card')+'" stroke-width="1.5"/>';
+    svg += '<text x="'+p.x.toFixed(1)+'" y="'+(p.y-8)+'" text-anchor="middle" fill="var(--text-secondary)" font-size="10" font-weight="700" font-family="'+cv('--font')+'">'+p.v.toFixed(1)+'%</text>';
+    svg += '<text x="'+p.x.toFixed(1)+'" y="'+(H3-2)+'" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="'+cv('--font')+'">'+MONTH_SHORT[p.m]+'</text>';
+  });
+  svg += '</svg>';
+  return '<div class="kr-ret-chart">'+svg+'</div>';
+}
+
+function buildIndCard(cls, title, anual, mensal, color){
+  var d = anual||{};
+  var h = '<div class="kr-ind-card '+cls+'">';
+  h += '<div class="kr-ind-title">'+title+'</div>';
+  h += '<div class="kr-ind-row">';
+  h += '<div class="kr-ind-metric"><span class="im-label">Realizado</span><span class="im-val big" style="color:'+color+'">'+krArrow(d.realizado,d.meta)+' '+fPctKR(d.realizado,1)+'</span></div>';
+  h += '<div class="kr-ind-metric"><span class="im-label">Meta</span><span class="im-val">'+fPctKR(d.meta,1)+'</span></div>';
+  h += '<div class="kr-ind-bar-wrap"><div class="kr-ind-bar-track"><div class="kr-ind-bar-fill" style="width:'+Math.min(d.atingimento_pct||0,100)+'%"></div></div></div>';
+  h += '<div class="kr-ind-pair"><div class="kr-ind-metric"><span class="im-label">Atg.</span><span class="im-val">'+fPctKR(d.atingimento_pct,1)+'</span></div>';
+  h += '<div class="kr-ind-metric"><span class="im-label">Nec.</span><span class="im-val">'+fPctKR(d.necessidade,1)+'</span></div></div>';
+  h += '</div>';
+  h += indMiniChart(mensal, d.meta, color);
+  h += '</div>';
+  return h;
+}
+
+function renderKRIndicators(){
+  var el = document.getElementById('kr-indicators');
+  if(!KR_DATA||!KR_DATA.indicadores){el.innerHTML='';return;}
+  var ind = KR_DATA.indicadores;
+  var html = '';
+  html += buildIndCard('ind-retencao', 'Retenção',
+    ind.RETENCAO?ind.RETENCAO.anual.GERAL:null,
+    ind.RETENCAO?ind.RETENCAO.mensal:{},
+    'var(--accent-orange)');
+  html += buildIndCard('ind-fcr', 'FCR',
+    ind.FCR?ind.FCR.anual.GERAL:null,
+    ind.FCR?ind.FCR.mensal:{},
+    'var(--accent-green)');
+  html += buildIndCard('ind-eficiencia', 'Eficiência Atend. Digital',
+    ind.EFICIENCIA_DIGITAL?ind.EFICIENCIA_DIGITAL.anual.GERAL:null,
+    ind.EFICIENCIA_DIGITAL?ind.EFICIENCIA_DIGITAL.mensal:{},
+    'var(--accent-purple)');
+  el.innerHTML = html;
+}
+
+function renderKR(){
+  renderKRGauges();
+  renderKRPelTable();
+  renderKRPelChart();
+  renderKRPelProducts();
+  renderKRNPS();
+  renderKRIndicators();
+}
+
+function fetchKR(){
+  _authFetch('/api/resultados/key-results')
+    .then(function(r){return r.json();})
+    .then(function(resp){
+      KR_DATA = resp;
+      document.getElementById('kr-section').style.display = '';
+      var dtRef = resp.dt_referencia;
+      if(dtRef && dtRef.length>=10){ var dp=dtRef.split('-'); dtRef=dp[2]+'/'+dp[1]+'/'+dp[0]; }
+      document.getElementById('kr-ref-date').textContent = dtRef || '--';
+      renderKR();
+    })
+    .catch(function(e){
+      console.error('Erro ao buscar Key Results:', e);
+    });
+}
+
 // ── Data fetch ──
 function fetchData(){
   _authFetch('/api/resultados/resumo?tipo='+currentTipo)
@@ -786,9 +1270,12 @@ function refreshAll(){
 // ── Init ──
 function init(){
   startClock();
+  fetchKR(); // Key Results (D-1)
   fetchData();
-  // Auto-refresh a cada 5 minutos
+  // Auto-refresh a cada 5 minutos (dados intradia)
   setInterval(fetchData, 300000);
+  // KR atualiza a cada 30 minutos (é D-1, não precisa ser frequente)
+  setInterval(fetchKR, 1800000);
 }
 document.addEventListener('DOMContentLoaded', init);
 

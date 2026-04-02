@@ -1090,6 +1090,82 @@ def api_headlines(user: dict = Depends(require_login)):
 
 
 # ---------------------------------------------------------------------------
+# Key Results (indicadores D-1, alimentação manual)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/resultados/key-results")
+def api_resultados_key_results(
+    ano: int = Query(None, description="Ano de referência (default: ano atual)"),
+    user: dict = Depends(require_login),
+):
+    """Retorna dados de Key Results da tabela gerencial.KeyResults.
+    Atualização D-1, alimentação manual."""
+    conn = get_conn()
+    cursor = conn.cursor(as_dict=True)
+    try:
+        # Se ano não informado, pega o mais recente
+        if ano is None:
+            cursor.execute("SELECT MAX(ano) AS ano FROM gerencial.KeyResults")
+            row = cursor.fetchone()
+            ano = row["ano"] if row and row["ano"] else datetime.now().year
+
+        cursor.execute("""
+            SELECT indicador, segmento, ano, mes,
+                   realizado, meta, meta_total_ano,
+                   projetado, projetado_pct, atingimento_pct,
+                   gap_meta, necessidade, yoy_pct,
+                   avaliacoes, ultimos_6m,
+                   dt_referencia
+            FROM gerencial.KeyResults
+            WHERE ano = %s
+            ORDER BY indicador, segmento, ISNULL(mes, 99)
+        """, (ano,))
+        rows = cursor.fetchall()
+
+        # Organizar por indicador
+        result = {}
+        dt_ref = None
+        for r in rows:
+            ind = r["indicador"]
+            if ind not in result:
+                result[ind] = {"anual": {}, "mensal": {}}
+
+            entry = {
+                "segmento": r["segmento"],
+                "realizado": float(r["realizado"]) if r["realizado"] is not None else None,
+                "meta": float(r["meta"]) if r["meta"] is not None else None,
+                "meta_total_ano": float(r["meta_total_ano"]) if r["meta_total_ano"] is not None else None,
+                "projetado": float(r["projetado"]) if r["projetado"] is not None else None,
+                "projetado_pct": float(r["projetado_pct"]) if r["projetado_pct"] is not None else None,
+                "atingimento_pct": float(r["atingimento_pct"]) if r["atingimento_pct"] is not None else None,
+                "gap_meta": float(r["gap_meta"]) if r["gap_meta"] is not None else None,
+                "necessidade": float(r["necessidade"]) if r["necessidade"] is not None else None,
+                "yoy_pct": float(r["yoy_pct"]) if r["yoy_pct"] is not None else None,
+                "avaliacoes": int(r["avaliacoes"]) if r["avaliacoes"] is not None else None,
+                "ultimos_6m": float(r["ultimos_6m"]) if r["ultimos_6m"] is not None else None,
+            }
+
+            if r["mes"] is None:
+                result[ind]["anual"][r["segmento"]] = entry
+            else:
+                mes = int(r["mes"])
+                if mes not in result[ind]["mensal"]:
+                    result[ind]["mensal"][mes] = {}
+                result[ind]["mensal"][mes][r["segmento"]] = entry
+
+            if r["dt_referencia"] and (dt_ref is None or r["dt_referencia"] > dt_ref):
+                dt_ref = r["dt_referencia"]
+
+        return {
+            "ano": ano,
+            "dt_referencia": str(dt_ref) if dt_ref else None,
+            "indicadores": result,
+        }
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Resultados (Painel de Acompanhamento de Negócios Intradia)
 # ---------------------------------------------------------------------------
 
