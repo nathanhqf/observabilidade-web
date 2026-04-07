@@ -179,14 +179,15 @@ td{padding:4px 10px;white-space:nowrap}
 .kr-bottom-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;align-items:stretch}
 
 /* NPS Card */
-.kr-nps-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px}
-.kr-nps-top{display:flex;align-items:center;gap:14px}
+.kr-nps-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.kr-nps-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;background:linear-gradient(135deg,var(--accent-yellow),#ffe082)}
+.kr-nps-top{display:flex;align-items:center;gap:14px;width:100%}
 .kr-nps-gauge{position:relative;width:100px;height:100px;flex-shrink:0}
 .kr-nps-gauge svg{width:100%;height:100%}
 .kr-nps-gauge .gauge-value{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
 .kr-nps-gauge .gauge-value .gv-num{font-size:22px;font-weight:900;letter-spacing:-0.5px;color:var(--accent-yellow)}
 .kr-nps-gauge .gauge-value .gv-label{font-size:8px;color:var(--text-muted);text-transform:uppercase;font-weight:700}
-.kr-nps-info{display:flex;flex-direction:column;gap:6px}
+.kr-nps-info{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .kr-nps-info .nps-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)}
 .kr-nps-chart{min-height:60px;margin-top:auto;width:100%}
 .kr-nps-stats{display:flex;gap:12px;flex-wrap:wrap}
@@ -247,7 +248,6 @@ td{padding:4px 10px;white-space:nowrap}
     <div>
       <div class="header-title">PAINEL DE RESULTADOS | CONEX</div>
       <div class="header-subtitle">Acompanhamento de Prêmio e Itens em tempo real</div>
-      <div class="header-subtitle" id="header-meta" style="margin-top:2px;"></div>
     </div>
   </div>
   <div class="header-right">
@@ -260,7 +260,6 @@ td{padding:4px 10px;white-space:nowrap}
     <div style="text-align:right;">
       <div class="header-clock" id="clock">--:--:--</div>
       <div class="header-date" id="date-display">--</div>
-      <div id="last-update" style="font-size:9px;color:#5a6088;font-style:italic;"></div>
     </div>
   </div>
 </div>
@@ -312,7 +311,10 @@ td{padding:4px 10px;white-space:nowrap}
 
   <!-- Separador Intradia -->
   <div class="section-divider">
-    <div class="section-divider-title">Acompanhamento de Negócios Intradia</div>
+    <div style="display:flex;flex-direction:column;">
+      <div class="section-divider-title">Acompanhamento de Negócios Intradia</div>
+      <div id="last-update" style="font-size:9px;color:#5a6088;font-style:italic;margin-top:2px;"></div>
+    </div>
     <div class="section-divider-line"></div>
     <div class="tabs" id="tipo-tabs">
       <button class="tab active" data-tipo="PREMIO" onclick="switchTipo('PREMIO')">Prêmio</button>
@@ -1122,6 +1124,7 @@ function renderKRNPS(){
   var months = Object.keys(mensal||{}).map(Number).sort(function(a,b){return a-b;});
 
   var html = '';
+  html += '<div class="kr-ind-title">NPS</div>';
   // Top row: Gauge + Stats
   html += '<div class="kr-nps-top">';
   html += '<div class="kr-nps-gauge">';
@@ -1129,8 +1132,7 @@ function renderKRNPS(){
   html += '<div class="gauge-value"><div class="gv-num">'+(anual.realizado!=null?anual.realizado.toFixed(1):'--')+'</div><div class="gv-label">NPS</div></div>';
   html += '</div>';
   html += '<div class="kr-nps-info">';
-  html += '<div class="nps-title">NPS '+KR_DATA.ano+'</div>';
-  html += '<div class="kr-nps-stats">';
+  html += '<div class="kr-nps-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">';
   html += '<div class="kr-nps-stat"><span class="stat-label">Meta</span><span class="stat-val" style="color:var(--accent-green)">'+(anual.meta!=null?anual.meta.toFixed(1):'--')+'</span></div>';
   html += '<div class="kr-nps-stat"><span class="stat-label">Avaliações</span><span class="stat-val">'+(anual.avaliacoes!=null?anual.avaliacoes.toLocaleString('pt-BR'):'--')+'</span></div>';
   html += '<div class="kr-nps-stat"><span class="stat-label">Atg. Meta</span><span class="stat-val" style="color:'+(anual.atingimento_pct!=null&&anual.atingimento_pct>=100?'var(--accent-green)':'var(--accent-yellow)')+'">'+fPctKR(anual.atingimento_pct,1)+'</span></div>';
@@ -1155,7 +1157,7 @@ function indMiniChart(mensal, metaVal, color){
   var maxV = Math.max.apply(null,allV)||1;
   var minV = Math.min.apply(null,allV)*0.95;
   var range = maxV-minV||1;
-  var svg = '<svg viewBox="0 0 '+W3+' '+H3+'" style="width:100%;height:100%">';
+  var svg = '<svg viewBox="0 0 '+W3+' '+H3+'" style="width:100%;height:100%;overflow:visible">';
   // Meta line
   var my = p3+(H3-p3*2)-(((metaVal-minV)/range)*(H3-p3*2));
   svg += '<line x1="0" y1="'+my.toFixed(1)+'" x2="'+W3+'" y2="'+my.toFixed(1)+'" stroke="var(--accent-red)" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>';
@@ -1251,7 +1253,6 @@ function fetchData(){
       refreshAll();
       document.getElementById('loading').classList.add('hidden');
       var meta = resp.meta;
-      document.getElementById('header-meta').textContent = 'Dados até: '+(meta.server_time||'--').substring(0,19).replace('T',' ');
       document.getElementById('last-update').textContent = 'Atualizado '+ new Date().toLocaleTimeString('pt-BR');
     })
     .catch(function(e){
