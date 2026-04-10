@@ -3,7 +3,9 @@
     "allow": [
       "Bash(cd /c/Users/natferreir/\"OneDrive - Brasilseg Companhia de Seguros\"/Documentos/Projetos/observabilidade_web)",
       "Bash(dir /b \"C:\\\\Users\\\\natferreir\\\\OneDrive - Brasilseg Companhia de Seguros\\\\Documentos\\\\Projetos\\\\observabilidade_web\")",
-      "Bash(/c/Windows/System32/cmd.exe /c \"dir /b \"\"C:\\\\Users\\\\natferreir\\\\OneDrive - Brasilseg Companhia de Seguros\\\\Documentos\\\\Projetos\\\\observabilidade_web\"\"\")"
+      "Bash(/c/Windows/System32/cmd.exe /c \"dir /b \"\"C:\\\\Users\\\\natferreir\\\\OneDrive - Brasilseg Companhia de Seguros\\\\Documentos\\\\Projetos\\\\observabilidade_web\"\"\")",
+      "Bash(python3:*)",
+      "Bash(python:*)"
     ]
   }
 }

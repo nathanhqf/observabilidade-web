@@ -9,7 +9,7 @@ import json
 import logging
 import ssl
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_type
 from urllib.request import urlopen, Request as UrlRequest
 from urllib.error import URLError
 from collections import defaultdict
@@ -43,6 +43,58 @@ def get_conn():
         password=SQL_PASSWORD,
         charset="utf8",
     )
+
+
+def _easter(year: int) -> date_type:
+    """Algoritmo de Meeus/Jones/Butcher para calcular a Páscoa."""
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month, day = divmod(h + l - 7 * m + 114, 31)
+    return date_type(year, month, day + 1)
+
+
+def _brazilian_holidays(year: int) -> set:
+    """Retorna set de datas de feriados nacionais brasileiros do ano."""
+    easter = _easter(year)
+    holidays = {
+        date_type(year, 1, 1),    # Confraternização Universal
+        date_type(year, 4, 21),   # Tiradentes
+        date_type(year, 5, 1),    # Dia do Trabalho
+        date_type(year, 9, 7),    # Independência
+        date_type(year, 10, 12),  # Nossa Senhora Aparecida
+        date_type(year, 11, 2),   # Finados
+        date_type(year, 11, 15),  # Proclamação da República
+        date_type(year, 11, 20),  # Consciência Negra
+        date_type(year, 12, 25),  # Natal
+        easter - timedelta(days=48),  # Segunda de Carnaval
+        easter - timedelta(days=47),  # Terça de Carnaval
+        easter - timedelta(days=2),   # Sexta-feira Santa
+        easter + timedelta(days=60),  # Corpus Christi
+    }
+    return holidays
+
+
+# Cache de feriados por ano
+_holidays_cache: dict[int, set] = {}
+
+
+def _is_holiday(d: date_type) -> bool:
+    """Verifica se uma data é feriado nacional brasileiro."""
+    if d.year not in _holidays_cache:
+        _holidays_cache[d.year] = _brazilian_holidays(d.year)
+    return d in _holidays_cache[d.year]
+
+
+def _is_non_business_day(d: date_type) -> bool:
+    """Verifica se uma data é feriado ou fim de semana."""
+    return d.weekday() >= 5 or _is_holiday(d)
 
 
 @asynccontextmanager
@@ -524,14 +576,45 @@ def api_volume(user: dict = Depends(require_login)):
         # Extrair time_offset do primeiro row da query principal
         time_offset = rows[0]["time_offset"] if rows else 0
 
-        # 4 queries de referência simples (1 por semana, cada uma é um index seek rápido)
+        # Obter data base para cálculos de feriado
+        cursor.execute("""
+            SELECT MAX(CAST(conversationStart AS DATE)) AS max_genesys
+            FROM genesys.ConversationDetails WHERE conversationStart IS NOT NULL
+        """)
+        _gdate_row = cursor.fetchone()
+        _genesys_dt = _gdate_row["max_genesys"] if _gdate_row else None
+        if _genesys_dt and not isinstance(_genesys_dt, date_type):
+            _genesys_dt = _genesys_dt.date() if hasattr(_genesys_dt, 'date') else date_type.fromisoformat(str(_genesys_dt)[:10])
+
+        # Calcular offsets de referência pulando feriados e fins de semana.
+        # Busca os 4 dias úteis equivalentes mais recentes (mesma DOW, sem feriado).
+        ref_offsets = []
+        if _genesys_dt:
+            candidate = 7
+            while len(ref_offsets) < 4 and candidate <= 56:
+                ref_date = _genesys_dt - timedelta(days=candidate)
+                if not _is_non_business_day(ref_date):
+                    ref_offsets.append(candidate)
+                candidate += 7
+            # Se não encontrou 4 por semana, preenche com offsets semanais extras
+            if len(ref_offsets) < 4:
+                candidate = 7
+                while len(ref_offsets) < 4 and candidate <= 56:
+                    if candidate not in ref_offsets:
+                        ref_offsets.append(candidate)
+                    candidate += 7
+
+        if not ref_offsets:
+            ref_offsets = [7, 14, 21, 28]
+
+        # Queries de referência (1 por semana válida)
         # Retorna totais por (ddd, janela) já agregados no SQL
         windows_def = [
             ("15m", 900), ("30m", 1800), ("1h", 3600),
             ("6h", 21600), ("12h", 43200),
         ]
         ref_vols = defaultdict(list)
-        for week_offset in [7, 14, 21, 28]:
+        for week_offset in ref_offsets:
             cursor.execute("""
                 DECLARE @MaxDate DATE = (
                     SELECT MAX(CAST(conversationStart AS DATE))
@@ -611,15 +694,8 @@ def api_volume(user: dict = Depends(require_login)):
                 hourly_map[ddd] = [0] * 48
             hourly_map[ddd][h["slot"]] = h["cnt"]
 
-        # Buscar data de referência (Genesys) e data da TLV
-        cursor.execute("""
-            SELECT
-                MAX(CAST(conversationStart AS DATE)) AS max_genesys
-            FROM genesys.ConversationDetails
-            WHERE conversationStart IS NOT NULL
-        """)
-        genesys_row = cursor.fetchone()
-        genesys_date = str(genesys_row["max_genesys"]) if genesys_row and genesys_row["max_genesys"] else None
+        # Data de referência (Genesys) já obtida acima
+        genesys_date = str(_genesys_dt) if _genesys_dt else None
 
         cursor.execute("""
             SELECT MAX(CAST(Dt_Atendimento AS DATE)) AS max_tlv
@@ -657,7 +733,13 @@ def api_volume(user: dict = Depends(require_login)):
             v6h = _var(vol6h, med6h)
             v12h = _var(vol12h, med12h)
             v24h = _var(total, med24h)
-            v7d = int(r["var7d"] or 0)
+            # var7d: se D-7 for feriado/fim de semana, usar mediana 24h em vez da
+            # comparação direta (que estaria distorcida pelo volume baixo do feriado)
+            raw_v7d = int(r["var7d"] or 0)
+            if _genesys_dt and _is_non_business_day(_genesys_dt - timedelta(days=7)):
+                v7d = v24h  # usa a variação baseada em mediana (já exclui feriados)
+            else:
+                v7d = raw_v7d
             # Medianas base para filtro de falso positivo
             bp15 = int(med15)
             bp30 = int(med30)
@@ -1384,28 +1466,38 @@ def api_resultados_resumo(
 def _severity(v15: int, v30: int, v1h: int, v6h: int, v12h: int, v24h: int, v7d: int,
               total: int, bp15: int = 0, bp30: int = 0, bp1h: int = 0, bp6h: int = 0,
               bp12h: int = 0, bp24h: int = 0) -> str:
-    """Calcula severidade considerando todas as janelas temporais e volume mínimo.
+    """Calcula severidade com 3 camadas de proteção contra falsos positivos:
 
-    Janelas com mediana base menor que MIN_BASE chamadas são ignoradas
-    para evitar falsos positivos por volatilidade estatística (ex: 1→7 = +600%).
+    1. MIN_BASE: janelas com mediana base < 8 chamadas são ignoradas
+       (evita distorção por volatilidade em DDDs pequenos).
+    2. Thresholds graduados: janelas curtas (15m-6h) precisam de variação
+       maior que longas (12h-7d) para disparar alerta.
+    3. Confirmação de tendência: 'critical' exige que pelo menos 2 janelas
+       curtas concordem acima do limiar de 'high', evitando que um spike
+       isolado de 15min marque o DDD como crítico.
     """
-    # DDDs com volume diário muito baixo não devem ser críticos
     if total < 10:
         return "normal"
-    # Ignorar variações de janelas com mediana base muito baixa
-    MIN_BASE = 5
+
+    MIN_BASE = 8
     eff_v15 = max(v15, 0) if bp15 >= MIN_BASE else 0
     eff_v30 = max(v30, 0) if bp30 >= MIN_BASE else 0
     eff_v1h = max(v1h, 0) if bp1h >= MIN_BASE else 0
     eff_v6h = max(v6h, 0) if bp6h >= MIN_BASE else 0
     eff_v12h = max(v12h, 0) if bp12h >= MIN_BASE else 0
     eff_v24h = max(v24h, 0) if bp24h >= MIN_BASE else 0
-    mx_short = max(eff_v15, eff_v30, eff_v1h, eff_v6h)
+
+    shorts = [eff_v15, eff_v30, eff_v1h, eff_v6h]
+    mx_short = max(shorts)
     mx_long = max(eff_v12h, eff_v24h, max(v7d, 0))
     mx = max(mx_short, mx_long)
-    if mx_short > 150 or mx_long > 80:
+
+    # Confirmação: quantas janelas curtas estão acima do limiar de "high"
+    short_high_count = sum(1 for v in shorts if v > 100)
+
+    if mx_long > 80 or (mx_short > 200 and short_high_count >= 2):
         return "critical"
-    if mx_short > 80 or mx_long > 50:
+    if mx_long > 50 or (mx_short > 100 and short_high_count >= 2):
         return "high"
     if mx > 30:
         return "medium"
