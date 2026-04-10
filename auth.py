@@ -34,7 +34,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
 # Session tokens
 # ---------------------------------------------------------------------------
 
-SESSION_TTL_HOURS = 8  # Duração de uma sessão (jornada de trabalho)
+SESSION_TTL_HOURS = 15  # Duração de uma sessão
 
 
 def create_session_token() -> str:

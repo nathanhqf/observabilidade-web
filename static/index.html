@@ -256,7 +256,7 @@ html[data-theme="light"] .news-ticker-row{background:linear-gradient(90deg,#e8ea
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Em Andamento</td><td style="padding:6px 10px;color:var(--text-secondary);">Interações atualmente conectadas sem registro de finalização.</td><td style="padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--accent-blue);">COUNT(OnGoingCalls) WHERE Dt_Fim IS NULL</td></tr>
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">TMA (Tempo Médio de Atendimento)</td><td style="padding:6px 10px;color:var(--text-secondary);">Tempo médio total de tratamento de uma interação pelo agente, incluindo conversa e tabulação pós-atendimento.</td><td style="padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--accent-blue);">AVG(tTalk + tAcw) = AVG(Duracao_Interacao + Duracao_Tabulacao)</td></tr>
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">ACW Médio (After Contact Work)</td><td style="padding:6px 10px;color:var(--text-secondary);">Tempo médio de tabulação pós-atendimento. Período em que o agente registra motivo, anotações e wrap-up code após encerrar a interação.</td><td style="padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--accent-blue);">AVG(Duracao_Tabulacao)</td></tr>
-              <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">DDDs Críticos</td><td style="padding:6px 10px;color:var(--text-secondary);">Quantidade de DDDs com severidade CRÍTICO — janelas curtas (15m/30m/1h) acima de 150% ou janelas longas (12h/24h/7d) acima de 80%, com volume mínimo de 10 chamadas.</td><td style="padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--accent-blue);">COUNT WHERE (short &gt; 150% OR long &gt; 80%) AND total &ge; 10</td></tr>
+              <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">DDDs Críticos</td><td style="padding:6px 10px;color:var(--text-secondary);">Quantidade de DDDs com severidade CRÍTICO — janelas longas (12h/24h/7d) acima de 80%, ou janelas curtas (15m/30m/1h/6h) acima de 200% com pelo menos 2 janelas concordando acima de 100%. Volume mínimo: 10 chamadas.</td><td style="padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--accent-blue);">COUNT WHERE (long &gt; 80% OR (short &gt; 200% AND confirm &ge; 2)) AND total &ge; 10</td></tr>
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Pico Horário</td><td style="padding:6px 10px;color:var(--text-secondary);">Hora do dia com maior concentração de volume de chamadas.</td><td style="padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--accent-blue);">HOUR(MAX(Volume_por_Hora))</td></tr>
             </tbody>
           </table>
@@ -293,6 +293,54 @@ html[data-theme="light"] .news-ticker-row{background:linear-gradient(90deg,#e8ea
           </table>
         </div>
         <div>
+          <div style="font-size:11px;font-weight:700;color:var(--accent-cyan);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);">Como Funciona o Cálculo de Criticidade</div>
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.7;display:flex;flex-direction:column;gap:14px;">
+            <div>
+              <div style="font-weight:700;color:var(--text-primary);margin-bottom:4px;">Passo 1 &mdash; Coleta de dados</div>
+              O sistema compara o volume de chamadas de <strong>agora</strong> com o volume dos <strong>mesmos horários nos mesmos dias da semana das últimas 4 semanas</strong> (pulando feriados e fins de semana). Por exemplo: se hoje é sexta-feira às 15h, ele busca as 4 sextas-feiras anteriores que não foram feriado e conta as chamadas de cada uma <strong>também só até as 15h</strong>.
+              <div style="margin-top:6px;">Isso é feito em 7 janelas de tempo:</div>
+              <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px;">
+                <tbody>
+                  <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 10px;font-weight:600;width:15%;">Δ15m</td><td style="padding:4px 10px;">Últimos 15 min de hoje vs mediana dos últimos 15 min das 4 semanas anteriores (mesmo dia da semana, mesmo horário)</td></tr>
+                  <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 10px;font-weight:600;">Δ30m, Δ1h, Δ6h, Δ12h</td><td style="padding:4px 10px;">Mesma lógica, com janelas progressivamente maiores</td></tr>
+                  <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 10px;font-weight:600;">Δ24h</td><td style="padding:4px 10px;">Volume acumulado do dia até agora vs mediana das 4 semanas anteriores até o mesmo horário</td></tr>
+                  <tr><td style="padding:4px 10px;font-weight:600;">Δ7d</td><td style="padding:4px 10px;">Volume acumulado hoje vs volume do mesmo dia 7 dias atrás até o mesmo horário (se D-7 for feriado, usa a mediana)</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <div style="font-weight:700;color:var(--text-primary);margin-bottom:4px;">Passo 2 &mdash; Filtros anti-ruído</div>
+              Antes de classificar, o sistema descarta variações que não são significativas:
+              <ul style="margin:6px 0 0 16px;padding:0;">
+                <li><strong>Volume diário &lt; 10 chamadas</strong> &rarr; automaticamente NORMAL. DDDs muito pequenos geram flutuações extremas sem significado (ex: 1&rarr;3 = +200%).</li>
+                <li><strong>Mediana da janela &lt; 8 chamadas</strong> &rarr; variação daquela janela é ignorada na classificação. Se um DDD normalmente recebe 3 chamadas por hora, qualquer oscilação vira +300%.</li>
+                <li><strong>Feriado em D-7</strong> &rarr; o Δ7d usa a mediana em vez da comparação direta com o dia atípico.</li>
+                <li><strong>Feriados nas semanas de referência</strong> &rarr; são excluídos da mediana e substituídos por semanas válidas anteriores.</li>
+              </ul>
+            </div>
+            <div>
+              <div style="font-weight:700;color:var(--text-primary);margin-bottom:4px;">Passo 3 &mdash; Classificação</div>
+              As janelas são divididas em <strong>curtas</strong> (Δ15m, Δ30m, Δ1h, Δ6h &mdash; capturam picos repentinos) e <strong>longas</strong> (Δ12h, Δ24h, Δ7d &mdash; capturam tendências sustentadas):
+              <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px;">
+                <thead><tr style="border-bottom:1px solid var(--border);">
+                  <th style="text-align:left;padding:4px 10px;color:var(--text-muted);font-size:10px;text-transform:uppercase;">Nível</th>
+                  <th style="text-align:left;padding:4px 10px;color:var(--text-muted);font-size:10px;text-transform:uppercase;">Condição</th>
+                </tr></thead>
+                <tbody>
+                  <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 10px;"><span class="badge badge-critical" style="font-size:9px;">&#9888; CRÍTICO</span></td><td style="padding:4px 10px;">Janela longa &gt; 80% <strong>OU</strong> janela curta &gt; 200% com pelo menos 2 janelas curtas &gt; 100%</td></tr>
+                  <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 10px;"><span class="badge badge-high" style="font-size:9px;">&#9650; ALTO</span></td><td style="padding:4px 10px;">Janela longa &gt; 50% <strong>OU</strong> janela curta &gt; 100% com pelo menos 2 janelas curtas &gt; 100%</td></tr>
+                  <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 10px;"><span class="badge badge-medium" style="font-size:9px;">&#9670; MÉDIO</span></td><td style="padding:4px 10px;">Qualquer janela &gt; 30%</td></tr>
+                  <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 10px;"><span class="badge badge-low" style="font-size:9px;">&#9679; BAIXO</span></td><td style="padding:4px 10px;">Qualquer janela &gt; 10%</td></tr>
+                  <tr><td style="padding:4px 10px;"><span class="badge badge-normal" style="font-size:9px;">&#10003; NORMAL</span></td><td style="padding:4px 10px;">Tudo &le; 10%</td></tr>
+                </tbody>
+              </table>
+              <div style="margin-top:8px;padding:8px 12px;background:var(--card-bg);border-left:3px solid var(--accent-cyan);border-radius:4px;font-size:11px;">
+                <strong>Por que exigir 2 janelas curtas?</strong> Porque um desastre real (enchente, tempestade) gera volume alto que <em>persiste</em> &mdash; aparece nos 15min, nos 30min e na 1h simultaneamente. Um spike isolado de 15 minutos que não se sustenta nos 30min não é desastre, é flutuação normal do call center.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
           <div style="font-size:11px;font-weight:700;color:var(--accent-cyan);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);">Critérios e Considerações sobre a Classificação</div>
           <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;">
             <thead><tr style="border-bottom:1px solid var(--border);">
@@ -304,7 +352,7 @@ html[data-theme="light"] .news-ticker-row{background:linear-gradient(90deg,#e8ea
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Volume mínimo por janela</td><td style="padding:6px 10px;color:var(--text-secondary);">Para todas as janelas (15min a 24h), a variação percentual só é considerada na classificação se a <strong>mediana base (últimas 4 semanas) na mesma janela for &ge; 8 chamadas</strong>. Isso evita falsos positivos onde, por exemplo, um DDD tinha mediana de 2 chamadas e tem 10 hoje &mdash; resultando em +400% que não representa um pico real. A variação ainda aparece na tabela, mas não influencia a severidade.</td></tr>
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Janelas curtas vs longas</td><td style="padding:6px 10px;color:var(--text-secondary);">Janelas curtas (15min, 30min, 1h, 6h) são mais sensíveis a picos repentinos e usam thresholds mais altos (&gt;200% para crítico, &gt;100% para alto). Além disso, exigem <strong>confirmação de tendência</strong>: pelo menos 2 janelas curtas devem estar acima de 100% simultaneamente para elevar a severidade. Isso evita que um spike isolado de 15min marque um DDD como crítico. Janelas longas (12h, 24h, 7d) capturam tendências sustentadas e usam thresholds mais baixos (&gt;80% para crítico), pois uma variação de 80% ao longo de 24h é mais significativa operacionalmente.</td></tr>
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Proteção contra feriados</td><td style="padding:6px 10px;color:var(--text-secondary);">O sistema reconhece automaticamente <strong>feriados nacionais brasileiros</strong> (fixos e móveis como Sexta-feira Santa, Carnaval e Corpus Christi) e fins de semana. Dias de referência que caem em feriado ou fim de semana são excluídos do cálculo de medianas, evitando que o volume baixo de um feriado distorça as variações. Se o Δ7d apontar para um feriado, ele é substituído pela variação baseada na mediana de dias úteis.</td></tr>
-              <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Dia parcial (Δ24h e Δ7d)</td><td style="padding:6px 10px;color:var(--text-secondary);">Quando o dia ainda está em andamento, as variações de <strong>Δ24h e Δ7d comparam o volume parcial de hoje contra a mediana</strong> das últimas 4 semanas (dia completo) ou 7 dias atrás. Isso gera uma tendência negativa natural (ex: às 15h, o dia acumula ~70% do volume final). Δ6h e Δ12h também são parciais quando menos de 6h ou 12h se passaram. Colunas marcadas com <span style="color:var(--accent-orange);">&#9888;</span> na tabela indicam essa situação. As janelas menores (15m, 30m, 1h) não sofrem esse efeito porque comparam a mesma faixa horária.</td></tr>
+              <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Comparação por horário equivalente</td><td style="padding:6px 10px;color:var(--text-secondary);">Todas as janelas &mdash; incluindo Δ24h e Δ7d &mdash; comparam o volume de hoje <strong>até o horário atual</strong> contra o volume dos dias de referência <strong>até o mesmo horário</strong>. Por exemplo, se agora são 15h, o Δ7d conta as chamadas de D-7 apenas até as 15h daquele dia, e a mediana do Δ24h também considera as semanas anteriores apenas até as 15h. Isso elimina a distorção de dia parcial, onde comparar um dia incompleto contra um dia inteiro gerava variações artificialmente negativas.</td></tr>
               <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;font-weight:600;">Defasagem TLV</td><td style="padding:6px 10px;color:var(--text-secondary);">A tabela de motivos (<code>tlv.Atendimentos_Genesys</code>) pode ter <strong>1+ dia de atraso</strong> em relação ao Genesys. Quando ocorre defasagem, os motivos exibidos referem-se à data mais recente disponível na TLV (indicada no cabeçalho), não à data dos dados de volume. O motivo principal por DDD também usa a data da TLV para evitar registros vazios.</td></tr>
               <tr><td style="padding:6px 10px;font-weight:600;">TMA &mdash; chamadas em andamento</td><td style="padding:6px 10px;color:var(--text-secondary);">O TMA (Tempo Médio de Atendimento) considera <strong>somente chamadas finalizadas</strong> (com <code>conversationEnd</code> preenchido). Chamadas ainda em andamento são excluídas para não distorcer a média &mdash; uma chamada aberta há 2h inflaria o TMA artificialmente. O número de chamadas em andamento é exibido separadamente no KPI "Em Andamento".</td></tr>
             </tbody>

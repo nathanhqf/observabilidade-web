@@ -242,14 +242,14 @@ def auth_login(request: Request, email: str = Form(...), password: str = Form(..
         if user["role"] == "pending":
             return RedirectResponse(url="/login?error=pending", status_code=303)
 
-        # Criar sessão
+        # Criar sessão — usar GETDATE() do SQL para evitar divergência de fuso
+        # entre o relógio do Python e o do SQL Server (a validação usa GETDATE())
         token = create_session_token()
-        expires = datetime.now() + timedelta(hours=SESSION_TTL_HOURS)
         cursor.execute("""
             INSERT INTO conexreport.sessions (token, user_id, expires_at, ip_address, user_agent)
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, DATEADD(HOUR, %s, GETDATE()), %s, %s)
         """, (
-            token, user["id"], expires,
+            token, user["id"], SESSION_TTL_HOURS,
             request.client.host if request.client else None,
             (request.headers.get("user-agent") or "")[:512],
         ))
@@ -454,7 +454,8 @@ def api_volume(user: dict = Depends(require_login)):
             prev7d_vol AS (
                 SELECT CAST(ddd AS INT) AS ddd, COUNT(*) AS prev7dTotal
                 FROM genesys.ConversationDetails
-                WHERE conversationStart >= @Prev7d AND conversationStart < @Prev7dNext
+                WHERE conversationStart >= @Prev7d
+                  AND conversationStart < DATEADD(SECOND, DATEDIFF(SECOND, CAST(@MaxDate AS DATETIME), @Now), CAST(@Prev7d AS DATETIME))
                   AND ddd IS NOT NULL AND ddd != ''
                   AND acd_participantNames IS NOT NULL AND acd_participantNames != ''
                 GROUP BY CAST(ddd AS INT)
