@@ -147,10 +147,11 @@ td{padding:4px 10px;white-space:nowrap}
 .kr-body{display:flex;flex-direction:column;gap:10px}
 
 /* PEL Section */
-.kr-pel-section{display:flex;flex-direction:column;gap:10px}
-.kr-pel-top{display:flex;flex-direction:column;gap:10px}
+.kr-pel-section{display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--bg-card-hover);border:1px solid var(--border);border-radius:var(--radius)}
+.kr-pel-section-header{display:flex;align-items:center;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.kr-pel-section-title{font-size:12px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:var(--accent-yellow);display:flex;align-items:center;gap:8px}
+.kr-pel-section-title::before{content:'';width:3px;height:14px;background:linear-gradient(180deg,var(--accent-yellow),#ffe082);border-radius:2px}
 .kr-pel-table-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.kr-pel-table-card .kr-card-title{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;color:var(--accent-yellow);letter-spacing:0.5px}
 .kr-pel-table{width:100%;border-collapse:collapse;font-size:11px}
 .kr-pel-table thead th{padding:6px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap}
 .kr-pel-table tbody td{padding:6px 10px;white-space:nowrap;border-bottom:1px solid rgba(37,43,94,0.4)}
@@ -279,25 +280,26 @@ td{padding:4px 10px;white-space:nowrap}
     <div class="kr-body">
       <!-- Left: PEL -->
       <div class="kr-pel-section">
-        <div class="kr-pel-top">
-          <div class="kr-pel-table-card">
-            <div class="kr-card-title">Prêmio Emitido Líquido | PEL</div>
-            <table class="kr-pel-table">
-              <thead><tr>
-                <th>PEL</th><th>Realizado</th><th>Meta Total</th><th>Atg. Meta</th>
-                <th>Projetado</th><th>Valor Projetado</th><th>GAP Meta</th>
-              </tr></thead>
-              <tbody id="kr-pel-tbody"></tbody>
-            </table>
-          </div>
-          <!-- PEL monthly chart -->
-          <div class="kr-pel-chart">
-            <div class="kr-pel-chart-title">PEL Mensal (Brasilseg+Auto) — PEL Dia + PEL Acumulado</div>
-            <div class="kr-pel-chart-area" id="kr-pel-chart-area"></div>
-          </div>
+        <div class="kr-pel-section-header">
+          <div class="kr-pel-section-title">Prêmio Emitido Líquido | PEL</div>
         </div>
-        <!-- PEL Products -->
+        <!-- 1. PEL Table (top) -->
+        <div class="kr-pel-table-card">
+          <table class="kr-pel-table">
+            <thead><tr>
+              <th>PEL</th><th>Realizado</th><th>Meta Total</th><th>Atg. Meta</th>
+              <th>Projetado</th><th>Valor Projetado</th><th>GAP Meta</th>
+            </tr></thead>
+            <tbody id="kr-pel-tbody"></tbody>
+          </table>
+        </div>
+        <!-- 2. PEL Products (middle) -->
         <div class="kr-pel-products" id="kr-pel-products"></div>
+        <!-- 3. PEL Monthly Chart (bottom) -->
+        <div class="kr-pel-chart">
+          <div class="kr-pel-chart-title">PEL Mensal (Brasilseg+Auto) — PEL Dia + PEL Acumulado</div>
+          <div class="kr-pel-chart-area" id="kr-pel-chart-area"></div>
+        </div>
       </div>
 
     </div>
