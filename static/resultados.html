@@ -297,7 +297,7 @@ td{padding:4px 10px;white-space:nowrap}
         <div class="kr-pel-products" id="kr-pel-products"></div>
         <!-- 3. PEL Monthly Chart (bottom) -->
         <div class="kr-pel-chart">
-          <div class="kr-pel-chart-title">PEL Mensal (Brasilseg+Auto) — PEL Dia + PEL Acumulado</div>
+          <div class="kr-pel-chart-title">PEL Mensal (Brasilseg+Auto) — Resultado por Mês</div>
           <div class="kr-pel-chart-area" id="kr-pel-chart-area"></div>
         </div>
       </div>
@@ -1013,17 +1013,13 @@ function renderKRPelChart(){
     var d = mensal[m].BRASILSEG_AUTO || mensal[m].BRASILSEG || mensal[m].GERAL;
     return d ? d.realizado||0 : 0;
   });
-  // cumulative
-  var cum = []; var running=0;
-  vals.forEach(function(v){running+=v;cum.push(running);});
 
-  var W=800, H=120, pad=30, padR=50, padB=20, padT=10;
+  var W=800, H=120, pad=30, padR=50, padB=20, padT=18;
   var maxBar = Math.max.apply(null,vals)||1;
-  var maxCum = Math.max.apply(null,cum)||1;
   var barW = Math.min(50, (W-pad-padR)/(months.length*1.8));
   var svg = '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%">';
 
-  // Bars
+  // Bars (monthly values)
   months.forEach(function(m,i){
     var x = pad + i*((W-pad-padR)/months.length) + barW*0.4;
     var bH = (vals[i]/maxBar)*(H-padT-padB);
@@ -1032,25 +1028,25 @@ function renderKRPelChart(){
     svg += '<text x="'+(x+barW/2)+'" y="'+(H-4)+'" text-anchor="middle" fill="'+cv('--text-muted')+'" font-size="7" font-family="'+cv('--font')+'">'+MONTH_SHORT[m]+'</text>';
   });
 
-  // Cumulative line
+  // Line connecting monthly values
   var linePoints = months.map(function(m,i){
     var x = pad + i*((W-pad-padR)/months.length) + barW*0.9;
-    var y = padT + (H-padT-padB) - (cum[i]/maxCum)*(H-padT-padB);
+    var y = padT + (H-padT-padB) - (vals[i]/maxBar)*(H-padT-padB);
     return x.toFixed(1)+','+y.toFixed(1);
   });
   if(linePoints.length>1){
     svg += '<polyline points="'+linePoints.join(' ')+'" fill="none" stroke="'+cv('--accent-cyan')+'" stroke-width="2" stroke-linecap="round"/>';
   }
-  // Dots + labels for cumulative
+  // Dots + labels (monthly values)
   months.forEach(function(m,i){
     var x = pad + i*((W-pad-padR)/months.length) + barW*0.9;
-    var y = padT + (H-padT-padB) - (cum[i]/maxCum)*(H-padT-padB);
+    var y = padT + (H-padT-padB) - (vals[i]/maxBar)*(H-padT-padB);
     svg += '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3" fill="'+cv('--accent-cyan')+'"/>';
-    svg += '<text x="'+x.toFixed(1)+'" y="'+(y-6)+'" text-anchor="middle" fill="'+cv('--text-secondary')+'" font-size="7" font-weight="700" font-family="'+cv('--font')+'">'+fMoney(cum[i])+'</text>';
+    svg += '<text x="'+x.toFixed(1)+'" y="'+(y-6)+'" text-anchor="middle" fill="'+cv('--text-secondary')+'" font-size="7" font-weight="700" font-family="'+cv('--font')+'">'+fMoney(vals[i])+'</text>';
   });
 
   // Right axis label
-  svg += '<text x="'+(W-4)+'" y="'+padT+'" text-anchor="end" fill="'+cv('--text-muted')+'" font-size="6" font-family="'+cv('--font')+'">'+fMoney(maxCum)+'</text>';
+  svg += '<text x="'+(W-4)+'" y="'+padT+'" text-anchor="end" fill="'+cv('--text-muted')+'" font-size="6" font-family="'+cv('--font')+'">'+fMoney(maxBar)+'</text>';
   svg += '<text x="'+(W-4)+'" y="'+(H-padB)+'" text-anchor="end" fill="'+cv('--text-muted')+'" font-size="6" font-family="'+cv('--font')+'">0</text>';
 
   svg += '</svg>';
