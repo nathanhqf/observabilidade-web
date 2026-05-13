@@ -90,8 +90,9 @@ Esta imagem contem dados mensais e acumulados. Referencia tipica: "Referencia: D
 - **"Projetado Geral" (ex: 253,832 Mi / R$283,25 Mi):**
   - 253,832 Mi = `projetado` do anual PEL/BRASILSEG
 - **Grafico mensal (barras por mes):**
-  - Cada barra = `realizado` de (mes=N, indicador='PEL', segmento='BRASILSEG')
+  - Cada barra = `realizado` de (mes=N, indicador='PEL', segmento='BRASILSEG_AUTO') — PEL Total consolidado (Brasilseg + Automovel)
   - Linha "PEL Acumulado" = soma progressiva (calculada pelo frontend)
+  - O frontend faz fallback para `BRASILSEG` ou `GERAL` caso `BRASILSEG_AUTO` nao exista no mes
 - **Linha de produtos (Residencial, Patrimonial, Credito Protegido, Vida, Outros):**
   - Valor grande (ex: R$21.881.729) = `realizado` do anual PEL/RESIDENCIAL
   - "Meta: R$22.142.101 (-1,18%)" = `meta_total_ano` e `yoy_pct`
@@ -190,11 +191,11 @@ INSERT INTO gerencial.KeyResults (ano, mes, indicador, segmento, realizado, meta
 VALUES
     (<ANO>, NULL, 'NPS', 'GERAL', <NPS_ACUM>, <META_NPS_ANO>, <ATG_PCT>, <AVAL_TOTAL>, <ULT_6M>, '<YYYY-MM-DD>');
 
--- PEL MENSAL (Brasilseg)
-INSERT INTO gerencial.KeyResults (ano, mes, indicador, segmento, realizado, meta, dt_referencia)
+-- PEL MENSAL (Brasilseg+Auto - PEL Total consolidado, usado no grafico de linha da secao PEL)
+INSERT INTO gerencial.KeyResults (ano, mes, indicador, segmento, realizado, atingimento_pct, dt_referencia)
 VALUES
-    (<ANO>, 1, 'PEL', 'BRASILSEG', <PEL_JAN>, NULL, '<YYYY-MM-DD>'),
-    (<ANO>, 2, 'PEL', 'BRASILSEG', <PEL_FEV>, NULL, '<YYYY-MM-DD>'),
+    (<ANO>, 1, 'PEL', 'BRASILSEG_AUTO', <PEL_JAN>, <ATG_JAN_PCT>, '<YYYY-MM-DD>'),
+    (<ANO>, 2, 'PEL', 'BRASILSEG_AUTO', <PEL_FEV>, <ATG_FEV_PCT>, '<YYYY-MM-DD>'),
     ...;
 
 -- PEL ANUAL por segmento
@@ -259,7 +260,15 @@ VALUES
 1. **Valores monetarios (PEL):** Sempre em R$ sem abreviacao. Ex: "R$ 60,526 Mi" na imagem = `60525970.00` no SQL. "R$ 1.445.459.531" = `1445459531.00`.
 2. **Percentuais:** Sempre como numero decimal. Ex: "22,67%" = `22.67`, "83,02%" = `83.02`.
 3. **NPS score:** Nao e percentual, e um score. Ex: 71,1 = `71.1`.
-4. **dt_referencia:** Extrair da imagem ("Referencia: 30/03/2026" = `'2026-03-30'`). Formato SQL: `YYYY-MM-DD`.
+4. **dt_referencia:** Regra dependente do ultimo mes exibido no grafico mensal:
+   - **Caso A — ultimo mes exibido eh um mes FECHADO (anterior ao mes atual):** usar o ultimo dia desse mes.
+     - Ex.: hoje 13/05/2026, grafico vai ate abril -> `dt_referencia = '2026-04-30'`.
+     - Ex.: grafico ate marco -> `'2026-03-31'`. Ate fevereiro -> `'2026-02-28'` (ou `'2026-02-29'` em bissexto).
+     - Motivo: o mes ja fechou, entao a referencia de negocio eh a data de fechamento do periodo.
+   - **Caso B — ultimo mes exibido EH o mes atual (parcial):** usar a data "Atualizado em" do cabecalho do painel.
+     - Ex.: hoje 12/05/2026, painel "Atualizado em: 12/05/2026", grafico vai ate maio -> `dt_referencia = '2026-05-12'`.
+     - Motivo: o mes ainda nao fechou; a referencia de negocio eh o ponto exato de corte da carga (que coincide com a data de atualizacao).
+   - Formato SQL: `YYYY-MM-DD`. NUNCA usar a data "Atualizado em" no Caso A.
 5. **mes = NULL:** Indica acumulado anual. NUNCA usar mes=0.
 6. **Sinal do GAP:** Se a imagem mostra "-R$ 71.471.173" o valor e `-71471173.00`.
 7. **Sinal do YoY:** Se mostra "+14,46%" = `14.46`. Se mostra "-1,18%" = `-1.18`.

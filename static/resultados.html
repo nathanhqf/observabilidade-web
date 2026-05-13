@@ -292,7 +292,7 @@ td{padding:4px 10px;white-space:nowrap}
           </div>
           <!-- PEL monthly chart -->
           <div class="kr-pel-chart">
-            <div class="kr-pel-chart-title">PEL Mensal (Brasilseg) — PEL Dia + PEL Acumulado</div>
+            <div class="kr-pel-chart-title">PEL Mensal (Brasilseg+Auto) — PEL Dia + PEL Acumulado</div>
             <div class="kr-pel-chart-area" id="kr-pel-chart-area"></div>
           </div>
         </div>
@@ -1008,7 +1008,7 @@ function renderKRPelChart(){
   if(!months.length){el.innerHTML='<div class="no-data">Sem dados mensais</div>';return;}
 
   var vals = months.map(function(m){
-    var d = mensal[m].BRASILSEG || mensal[m].GERAL;
+    var d = mensal[m].BRASILSEG_AUTO || mensal[m].BRASILSEG || mensal[m].GERAL;
     return d ? d.realizado||0 : 0;
   });
   // cumulative

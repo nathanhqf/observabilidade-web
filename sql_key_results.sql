@@ -81,12 +81,13 @@ VALUES
 -- ─────────────────────────────────────────────
 -- PEL (Prêmio Emitido Líquido)
 -- ─────────────────────────────────────────────
--- Mensal - GERAL (Brasilseg apenas, sem auto)
+-- Mensal - BRASILSEG_AUTO (PEL Total consolidado: Brasilseg + Automovel)
+-- Esses valores alimentam o grafico de linha "PEL Mensal (Brasilseg+Auto)" no painel
 INSERT INTO gerencial.KeyResults (ano, mes, indicador, segmento, realizado, meta, dt_referencia)
 VALUES
-    (2026, 1, 'PEL', 'BRASILSEG', 15230450.00, NULL, '2026-03-30'),
-    (2026, 2, 'PEL', 'BRASILSEG', 22150880.00, NULL, '2026-03-30'),
-    (2026, 3, 'PEL', 'BRASILSEG', 23144640.00, NULL, '2026-03-30');
+    (2026, 1, 'PEL', 'BRASILSEG_AUTO', 110230450.00, NULL, '2026-03-30'),
+    (2026, 2, 'PEL', 'BRASILSEG_AUTO', 105150880.00, NULL, '2026-03-30'),
+    (2026, 3, 'PEL', 'BRASILSEG_AUTO', 112244640.00, NULL, '2026-03-30');
 
 -- Acumulado anual - por segmento
 INSERT INTO gerencial.KeyResults (ano, mes, indicador, segmento, realizado, meta_total_ano, atingimento_pct, projetado_pct, projetado, gap_meta, dt_referencia)
